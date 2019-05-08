@@ -332,10 +332,6 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
         this.log("Not adding [%s] as it already exists in the cache", deviceId ? deviceId : device.deviceid);
         return;
     }
-    if (this.accessories.get(device.deviceid)) {
-        this.log("Not adding [%s] as it already exists in the cache 2", deviceId ? deviceId : device.deviceid);
-        return;
-    }
 
     let platform = this;
     let channel = 0;
@@ -408,6 +404,10 @@ eWeLink.prototype.getSequence = function() {
 eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, device = null, channel = null) {
 
     // Used when we receive an update from an external source
+
+    platform.log("updatePowerStateCharacteristic deviceId ", deviceId);
+    platform.log("updatePowerStateCharacteristic device.deviceid ", device.deviceid);
+    platform.log("updatePowerStateCharacteristic channel ", channel);
 
     let platform = this;
 

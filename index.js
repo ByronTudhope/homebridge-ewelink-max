@@ -617,12 +617,11 @@ eWeLink.prototype.setPowerState = function(accessory, isOn, callback) {
     payload.userAgent = 'app';
     payload.params = {};
     if(accessory.context.switches > 1) {
-        deviceId = deviceId.replace("CH"+accessory.context.channel,"");
         let deviceInformationFromWebApi = platform.devicesFromApi.get(deviceId);
+        platform.log("BYRON LOGGING deviceInformationFromWebApi: ", deviceInformationFromWebApi);
         payload.params.switches = deviceInformationFromWebApi.params.switches;
         payload.params.switches[accessory.context.channel - 1].switch = targetState;
-    }
-    else {
+    } else {
         payload.params.switch = targetState;
     }
     payload.apikey = '' + accessory.context.apiKey;

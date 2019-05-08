@@ -513,10 +513,6 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
 
         let deviceId = accessory.context.deviceId;
 
-        if(accessory.context.switches > 1) {
-            deviceId = deviceId.replace("CH" + accessory.context.channel, "");
-        }
-
         let filteredResponse = body.filter(device => (device.deviceid === deviceId));
 
         if (filteredResponse.length === 1) {
@@ -534,14 +530,14 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
 
                 if(accessory.context.switches > 1) {
 
-                    if (device.params.switches[accessory.context.channel-1].switch === 'on') {
+                    if (device.params.switches[channel].switch === 'on') {
                         accessory.reachable = true;
-                        platform.log('API reported that [%s] CH %s is On', device.name, accessory.context.channel);
+                        platform.log('API reported that [%s] CH%s is On', device.name, (channel + 1));
                         callback(null, 1);
                         return;
-                    } else if (device.params.switches[accessory.context.channel-1].switch === 'off') {
+                    } else if (device.params.switches[channel].switch === 'off') {
                         accessory.reachable = true;
-                        platform.log('API reported that [%s] CH %s is Off', device.name, accessory.context.channel);
+                        platform.log('API reported that [%s] CH%s is Off', device.name, (channel + 1));
                         callback(null, 0);
                         return;
                     } else {

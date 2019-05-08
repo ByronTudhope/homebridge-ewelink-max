@@ -481,7 +481,6 @@ eWeLink.prototype.getPowerState = function(accessory, callback) {
     }
 
     platform.log("Requesting power state for [%s]", accessory.displayName);
-    platform.log("Requesting power state for [%s]", accessory.context.deviceid);
 
     this.webClient.get('/api/user/device', function(err, res, body) {
 
@@ -507,9 +506,9 @@ eWeLink.prototype.getPowerState = function(accessory, callback) {
 
         let deviceId = accessory.context.deviceId;
 
-        if(accessory.context.switches > 1) {
+/*        if(accessory.context.switches > 1) {
             deviceId = deviceId.replace("CH" + accessory.context.channel, "");
-        }
+        }*/
 
         let filteredResponse = body.filter(device => (device.deviceid === deviceId));
 

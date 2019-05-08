@@ -524,13 +524,13 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
 
                     if (device.params.switches[channel].switch === 'on') {
                         accessory.reachable = true;
-                        let channelString = channel + 1;
+                        let channelString = parseInt(channel, 10) + 1;
                         platform.log('API reported that [%s CH%s] is On', device.name, channelString);
                         callback(null, 1);
                         return;
                     } else if (device.params.switches[channel].switch === 'off') {
                         accessory.reachable = true;
-                        let channelString = channel + 1;
+                        let channelString = parseInt(channel, 10) + 1;
                         platform.log('API reported that [%s CH%s] is Off', device.name, channelString);
                         callback(null, 0);
                         return;

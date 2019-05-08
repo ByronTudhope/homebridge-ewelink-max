@@ -387,11 +387,11 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
     accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.FirmwareRevision, device.params.fwVersion);
 
     let switchesAmount = platform.getDeviceChannelCount(device);
-    if (switchesAmount > 1) {
+    /*if (switchesAmount > 1) {
         accessory.context.switches = switchesAmount;
-    }
+    }*/
 
-    this.accessories.set(device.deviceid, accessory);
+    this.accessories.set(deviceId ? deviceId : device.deviceid, accessory);
 
     this.api.registerPlatformAccessories("homebridge-eWeLink",
         "eWeLink", [accessory]);
@@ -455,6 +455,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     if(accessory.context.switches > 1) {
 
+        platform.getPowerState
         let service = accessory.services[channel - 1];
         if (service) {
             platform.log("BYRON LOGGING service ", service);

@@ -424,7 +424,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     platform.log("Updating recorded Characteristic.On for [%s] to [%s]. No request will be sent to the device.", accessory.displayName, isOn);
 
-    let switchesAmount = platform.getDeviceChannelCount(deviceId);
+    let switchesAmount = platform.getDeviceChannelCount(accessory);
 
     if(switchesAmount > 1) {
         platform.log("BYRON LOGGING switches more than one: ", switchesAmount);
@@ -494,7 +494,7 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
         }
 
         let deviceId = accessory.context.deviceId;
-        let switchesAmount = platform.getDeviceChannelCount(deviceId);
+        let switchesAmount = platform.getDeviceChannelCount(accessory);
 
         let filteredResponse = body.filter(device => (device.deviceid === deviceId));
 
@@ -597,7 +597,7 @@ eWeLink.prototype.setPowerState = function(accessory, channel, isOn, callback) {
     payload.action = 'update';
     payload.userAgent = 'app';
     payload.params = {};
-    let switchesAmount = platform.getDeviceChannelCount(deviceId);
+    let switchesAmount = platform.getDeviceChannelCount(accessory);
     if(switchesAmount > 1) {
         let deviceInformationFromWebApi = platform.devicesFromApi.get(deviceId);
         //platform.log("BYRON LOGGING switches: ", deviceInformationFromWebApi.params.switches);

@@ -417,6 +417,8 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     let isOn = false;
 
+    platform.log("BYRON LOGGING getting device ID: ", deviceId);
+
     let accessory = platform.accessories.get(deviceId);
 
     if(typeof accessory === 'undefined' && device) {
@@ -432,6 +434,8 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
         return;
     }
 
+    platform.log("BYRON LOGGING accessory: ", accessory);
+
     if (state === 'on') {
         isOn = true;
     }
@@ -439,8 +443,14 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
     platform.log("Updating recorded Characteristic.On for [%s] to [%s]. No request will be sent to the device.", accessory.displayName, isOn);
 
     if(accessory.context.switches > 1) {
+        platform.log("BYRON LOGGING switches more than one: ", accessory.context.switches);
 
-        accessory.getService(device.name + (channel ? ' CH ' + channel : '')).setCharacteristic(Characteristic.On, isOn);
+        let service = accessory.getService(device.name + (channel ? ' CH ' + channel : ''));
+
+        
+        platform.log("BYRON LOGGING service: ", service);
+
+        service.setCharacteristic(Characteristic.On, isOn);
 
 /*        let index = channel - 1;
 
@@ -458,6 +468,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
         //payload.params.switches[accessory.context.channel - 1].switch = targetState;
     } else {
+        platform.log("BYRON LOGGING switches one: ");
         accessory.getService(Service.Switch)
             .setCharacteristic(Characteristic.On, isOn);
     }

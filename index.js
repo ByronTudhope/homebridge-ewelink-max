@@ -416,7 +416,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     if(deviceId) {
         let id = deviceId.split("CH");
-        channel = id[1];
+        channel = id[1] - 1;
         deviceId = id[0];
     }
 
@@ -428,9 +428,9 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     let accessory = platform.accessories.get(deviceId);
 
-    this.log("BYRON LOGGING accessory ", accessory);
+/*    this.log("BYRON LOGGING accessory ", accessory);
     this.log("BYRON LOGGING context ", accessory.context);
-    this.log("BYRON LOGGING services ", accessory.services);
+    this.log("BYRON LOGGING services ", accessory.services);*/
 
     return;
 
@@ -455,6 +455,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     if(accessory.context.switches > 1) {
 
+        return;
         let service = accessory.services[channel - 1];
         if (service) {
             platform.log("BYRON LOGGING service ", service);

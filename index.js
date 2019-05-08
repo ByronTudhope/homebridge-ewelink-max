@@ -157,14 +157,14 @@ function eWeLink(log, config, api) {
 
                             if(switchesAmount > 1) {
                                 platform.log(switchesAmount + " channels device has been set: " + deviceInformationFromWebApi.extra.extra.model + ' uiid: ' + deviceInformationFromWebApi.uiid);
-                                for(let i=0; i!==switchesAmount; i++) {
+                                for(let i=0; i<switchesAmount; i++) {
                                     accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Name, deviceInformationFromWebApi.name + ' CH ' + (i+1));
-                                    platform.updatePowerStateCharacteristic(deviceId + 'CH' + (i+1), deviceInformationFromWebApi.params.switches[i].switch, platform.devicesFromApi.get(deviceId));
+                                    platform.updatePowerStateCharacteristic(deviceId, i, deviceInformationFromWebApi.params.switches[i].switch);
                                 }
                             } else  {
                                 platform.log("Single channel device has been set: " + deviceInformationFromWebApi.extra.extra.model + ' uiid: ' + deviceInformationFromWebApi.uiid);
                                 accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Name, deviceInformationFromWebApi.name);
-                                platform.updatePowerStateCharacteristic(deviceId, deviceInformationFromWebApi.params.switch);
+                                platform.updatePowerStateCharacteristic(deviceId, 0, deviceInformationFromWebApi.params.switch);
                             }
 
                         } else {
@@ -214,11 +214,11 @@ function eWeLink(log, config, api) {
                                 //platform.log("Update message received for device [%s]", json.deviceid);
 
                                 if (json.hasOwnProperty("params") && json.params.hasOwnProperty("switch")) {
-                                    platform.updatePowerStateCharacteristic(json.deviceid, json.params.switch);
+                                    platform.updatePowerStateCharacteristic(json.deviceid, 0, json.params.switch);
                                 } else if (json.hasOwnProperty("params") && json.params.hasOwnProperty("switches") && Array.isArray(json.params.switches)) {
                                     json.params.switches.forEach(function (entry) {
                                         if (entry.hasOwnProperty('outlet') && entry.hasOwnProperty('switch')) {
-                                            platform.updatePowerStateCharacteristic(json.deviceid + 'CH' + (entry.outlet+1), entry.switch, platform.devicesFromApi.get(json.deviceid));
+                                            platform.updatePowerStateCharacteristic(json.deviceid, entry.outlet, entry.switch);
                                         }
                                     });
                                 }
@@ -382,18 +382,9 @@ eWeLink.prototype.getSequence = function() {
     return this.sequence;
 };
 
-eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, device = null, channel = null) {
+eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, channel, state) {
 
     // Used when we receive an update from an external source
-
-    if(deviceId) {
-        let id = deviceId.split("CH");
-        channel = id[1];
-        if (!channel) {
-            channel = null;
-        }
-        deviceId = id[0];
-    }
 
     let platform = this;
 
@@ -402,14 +393,6 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
     platform.log("BYRON LOGGING getting device ID: ", deviceId);
 
     let accessory = platform.accessories.get(deviceId);
-
-    if(typeof accessory === 'undefined' && device) {
-        platform.log("Can't find device [%s], ignoring.", deviceId);
-        return;
-        platform.log("Adding accessory for deviceId [%s].", deviceId);
-        //platform.addAccessory(device, deviceId);
-        accessory = platform.accessories.get(deviceId);
-    }
 
     if (!accessory) {
         platform.log("Error updating non-exist accessory with deviceId [%s].", deviceId);
@@ -423,14 +406,13 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
     }
 
     platform.log("Updating recorded Characteristic.On for [%s] to [%s]. No request will be sent to the device.", accessory.displayName, isOn);
-
-    let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
+    let device = platform.devicesFromApi.get(deviceId);
+    let switchesAmount = platform.getDeviceChannelCount(device);
 
     if(switchesAmount > 1) {
         platform.log("BYRON LOGGING switches more than one: ", switchesAmount);
 
-        let service = accessory.getService(device.name + (channel ? ' CH ' + channel : ''));
-
+        let service = accessory.getServiceByUUIDAndSubType(device.name + ' CH' + (channel + 1), 'channel-' + channel);
 
         platform.log("BYRON LOGGING service: ", service);
 
@@ -452,7 +434,6 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
         //payload.params.switches[accessory.context.channel - 1].switch = targetState;
     } else {
-        platform.log("BYRON LOGGING switches one: ");
         accessory.getService(Service.Switch)
             .setCharacteristic(Characteristic.On, isOn);
     }

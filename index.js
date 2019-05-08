@@ -357,7 +357,6 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
     accessory.context.deviceId = device.deviceid;
     accessory.context.apiKey = device.apikey;
     accessory.context.switches = 1;
-    accessory.context.channel = channel;
 
     let switchesAmount = platform.getDeviceChannelCount(device);
     if (switchesAmount > 1) {
@@ -368,15 +367,15 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
 
     platform.log("BYRON LOGGING switchesAmount ", switchesAmount);
 
-    for (var channel = 0; channel <= switchesAmount; channel++) {
-        platform.log("BYRON LOGGING looper ", channel);
-        accessory.addService(Service.Switch, device.name + ' CH' + (channel + 1), 'channel-' + channel)
+    for (var switchChannel = 0; switchChannel <= switchesAmount; switchChannel++) {
+        platform.log("BYRON LOGGING looper ", switchChannel);
+        accessory.addService(Service.Switch, device.name + ' CH' + (switchChannel + 1), 'channel-' + switchChannel)
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
-                platform.setPowerState(accessory, channel, value, callback);
+                platform.setPowerState(accessory, switchChannel, value, callback);
             })
             .on('get', function(callback) {
-                platform.getPowerState(accessory, channel, callback);
+                platform.getPowerState(accessory, switchChannel, callback);
             });
     }
 

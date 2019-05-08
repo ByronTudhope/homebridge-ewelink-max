@@ -406,7 +406,9 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
     // Used when we receive an update from an external source
 
     this.log("updatePowerStateCharacteristic deviceId ", deviceId);
-    this.log("updatePowerStateCharacteristic device.deviceid ", device.deviceid);
+    if (device) {
+        this.log("updatePowerStateCharacteristic device.deviceid ", device.deviceid);
+    }
     this.log("updatePowerStateCharacteristic channel ", channel);
 
     let platform = this;

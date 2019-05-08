@@ -466,7 +466,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
         let service = accessory.services[index];
         if (service) {
             //platform.log("BYRON LOGGING service ", service);
-            service.setCharacteristic(Characteristic.On, isOn);
+            //service.setCharacteristic(Characteristic.On, isOn);
         }
 
         //payload.params.switches[accessory.context.channel - 1].switch = targetState;

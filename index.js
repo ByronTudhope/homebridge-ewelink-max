@@ -481,6 +481,7 @@ eWeLink.prototype.getPowerState = function(accessory, callback) {
     }
 
     platform.log("Requesting power state for [%s]", accessory.displayName);
+    platform.log("Requesting power state for [%s]", accessory.context.deviceid);
 
     this.webClient.get('/api/user/device', function(err, res, body) {
 

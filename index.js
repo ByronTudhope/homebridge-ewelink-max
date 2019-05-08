@@ -387,11 +387,11 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
     accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.FirmwareRevision, device.params.fwVersion);
 
     let switchesAmount = platform.getDeviceChannelCount(device);
-    /*if (switchesAmount > 1) {
+    if (switchesAmount > 1) {
         accessory.context.switches = switchesAmount;
-    }*/
+    }
 
-    this.accessories.set(deviceId ? deviceId : device.deviceid, accessory);
+    this.accessories.set(device.deviceid, accessory);
 
     this.api.registerPlatformAccessories("homebridge-eWeLink",
         "eWeLink", [accessory]);
@@ -414,13 +414,13 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
     }
     this.log("BYRON LOGGING updatePowerStateCharacteristic channel ", channel);
 
-/*    if(deviceId) {
+    if(deviceId) {
         let id = deviceId.split("CH");
         channel = id[1];
         deviceId = id[0];
-    }*/
+    }
 
-/*    this.log("BYRON LOGGING updatePowerStateCharacteristic channel after split ", channel);*/
+    this.log("BYRON LOGGING updatePowerStateCharacteristic channel after split ", channel);
 
     let platform = this;
 
@@ -428,11 +428,11 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     let accessory = platform.accessories.get(deviceId);
 
-/*    this.log("BYRON LOGGING accessory ", accessory);
+    this.log("BYRON LOGGING accessory ", accessory);
     this.log("BYRON LOGGING context ", accessory.context);
-    this.log("BYRON LOGGING services ", accessory.services);*/
+    this.log("BYRON LOGGING services ", accessory.services);
 
-    /*return;*/
+    return;
 
     if(typeof accessory === 'undefined' && device) {
         platform.log("Can't find device [%s].", deviceId);
@@ -455,7 +455,6 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     if(accessory.context.switches > 1) {
 
-        platform.getPowerState
         let service = accessory.services[channel - 1];
         if (service) {
             platform.log("BYRON LOGGING service ", service);
@@ -506,9 +505,9 @@ eWeLink.prototype.getPowerState = function(accessory, callback) {
 
         let deviceId = accessory.context.deviceId;
 
-/*        if(accessory.context.switches > 1) {
+        if(accessory.context.switches > 1) {
             deviceId = deviceId.replace("CH" + accessory.context.channel, "");
-        }*/
+        }
 
         let filteredResponse = body.filter(device => (device.deviceid === deviceId));
 

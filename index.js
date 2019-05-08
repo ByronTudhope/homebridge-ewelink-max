@@ -410,14 +410,14 @@ eWeLink.prototype.getSequence = function() {
     return this.sequence;
 };
 
-eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, switch) {
+eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
 
     // Used when we receive an update from an external source
 
     let platform = this;
 
     platform.log("BYRON LOGGING getting device ID: ", deviceId);
-    platform.log("BYRON LOGGING getting switch: ", switch);
+    platform.log("BYRON LOGGING getting state: ", state);
 
     let accessory = platform.accessories.get(deviceId);
 
@@ -429,7 +429,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, switch) {
 
     return;
 
-    platform.log("Updating recorded Characteristic.On for [%s], to [%s]", accessory.displayName, switch);
+    platform.log("Updating recorded Characteristic.On for [%s], to [%s]", accessory.displayName, state);
     
     let device = platform.devicesFromApi.get(deviceId);
     let switchesAmount = platform.getDeviceChannelCount(device);

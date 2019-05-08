@@ -327,8 +327,8 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
 
     // Here we need to check if it is currently there
     
-    if (this.accessories.get(deviceId ? deviceId : device.deviceid)) {
-        this.log("Not adding [%s] as it already exists in the cache", deviceId ? deviceId : device.deviceid);
+    if (this.accessories.get(device.deviceid)) {
+        this.log("Not adding [%s] as it already exists in the cache", device.deviceid);
         return;
     }
 
@@ -352,24 +352,33 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
         this.log("Problem accessory Accessory with Name : [%s], Manufacturer : [%s], Error : [%s], Is Online : [%s], API Key: [%s] ", device.name + (channel ? ' CH ' + channel : ''), device.productModel, e, device.online, device.apikey);
     }
 
-    const accessory = new Accessory(device.name + (channel ? ' CH ' + channel : ''), UUIDGen.generate((deviceId ? deviceId : device.deviceid).toString()));
+    const accessory = new Accessory(device.name, UUIDGen.generate((device.deviceid).toString()));
 
-    accessory.context.deviceId = deviceId ? deviceId : device.deviceid;
+    accessory.context.deviceId = device.deviceid;
     accessory.context.apiKey = device.apikey;
     accessory.context.switches = 1;
     accessory.context.channel = channel;
 
+    let switchesAmount = platform.getDeviceChannelCount(device);
+    if (switchesAmount > 1) {
+        accessory.context.switches = switchesAmount;
+    }
+
     accessory.reachable = device.online === 'true';
 
-    accessory.addService(Service.Switch, device.name + (channel ? ' CH ' + channel : ''))
-        .getCharacteristic(Characteristic.On)
-        .on('set', function(value, callback) {
-            platform.setPowerState(accessory, value, callback);
-        })
-        .on('get', function(callback) {
-            platform.getPowerState(accessory, callback);
-        });
+    platform.log("BYRON LOGGING switchesAmount ", switchesAmount);
 
+    for (var i = 1; i <= switchesAmount; i++) {
+        platform.log("BYRON LOGGING looper ", i);
+        accessory.addService(Service.Switch, device.name + ' CH' + i)
+            .getCharacteristic(Characteristic.On)
+            .on('set', function(value, callback) {
+                platform.setPowerState(accessory, value, callback);
+            })
+            .on('get', function(callback) {
+                platform.getPowerState(accessory, callback);
+            });
+    }
 
     accessory.on('identify', function(paired, callback) {
         platform.log(accessory.displayName, "Identify not supported");
@@ -382,16 +391,10 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
     accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Identify, false);
     accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.FirmwareRevision, device.params.fwVersion);
 
-    let switchesAmount = platform.getDeviceChannelCount(device);
-    if (switchesAmount > 1) {
-        accessory.context.switches = switchesAmount;
-    }
-
     this.accessories.set(device.deviceid, accessory);
 
     this.api.registerPlatformAccessories("homebridge-eWeLink",
         "eWeLink", [accessory]);
-
 };
 
 eWeLink.prototype.getSequence = function() {
@@ -447,7 +450,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
         let service = accessory.getService(device.name + (channel ? ' CH ' + channel : ''));
 
-        
+
         platform.log("BYRON LOGGING service: ", service);
 
         service.setCharacteristic(Characteristic.On, isOn);

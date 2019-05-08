@@ -370,7 +370,7 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
 
     for (var i = 1; i <= switchesAmount; i++) {
         platform.log("BYRON LOGGING looper ", i);
-        accessory.addService(Service.Switch, device.name + ' CH' + i)
+        accessory.addService(Service.Switch, device.name + ' CH' + i, 'channel-' + i)
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
                 platform.setPowerState(accessory, value, callback);

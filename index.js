@@ -408,9 +408,6 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     // Used when we receive an update from an external source
 
-    this.log("BYRON LOGGING updatePowerStateCharacteristic accessories ", this.accessories);
-    return;
-
     this.log("BYRON LOGGING updatePowerStateCharacteristic deviceId ", deviceId);
     if (device) {
         this.log("BYRON LOGGING updatePowerStateCharacteristic device.deviceid ", device.deviceid);
@@ -431,7 +428,11 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     let accessory = platform.accessories.get(deviceId);
 
-    //this.log("BYRON LOGGING accessory ", accessory);
+    this.log("BYRON LOGGING accessory ", accessory);
+    this.log("BYRON LOGGING context ", accessory.context);
+    this.log("BYRON LOGGING services ", accessory.services);
+
+    return;
 
     if(typeof accessory === 'undefined' && device) {
         platform.log("Can't find device [%s].", deviceId);

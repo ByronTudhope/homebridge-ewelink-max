@@ -372,9 +372,11 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
         accessory.addService(Service.Switch, device.name + ' CH' + (switchChannel + 1), 'channel-' + switchChannel)
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
+                platform.log("BYRON LOGGING set ", switchChannel);
                 platform.setPowerState(accessory, switchChannel, value, callback);
             })
             .on('get', function(callback) {
+                platform.log("BYRON LOGGING get ", switchChannel);
                 platform.getPowerState(accessory, switchChannel, callback);
             });
     }
@@ -597,7 +599,6 @@ eWeLink.prototype.setPowerState = function(accessory, channel, isOn, callback) {
     let deviceId = accessory.context.deviceId;
     options.protocolVersion = 13;
 
-    platform.log("BYRON LOGGING device: ", accessory);
     platform.log("BYRON LOGGING channel: ", channel);
 
     let targetState = 'off';
@@ -614,10 +615,10 @@ eWeLink.prototype.setPowerState = function(accessory, channel, isOn, callback) {
     payload.params = {};
     if(accessory.context.switches > 1) {
         let deviceInformationFromWebApi = platform.devicesFromApi.get(deviceId);
-        platform.log("BYRON LOGGING switches: ", deviceInformationFromWebApi.params.switches);
-        platform.log("BYRON LOGGING accessory.context.channel: ", channel);
+        //platform.log("BYRON LOGGING switches: ", deviceInformationFromWebApi.params.switches);
+        //platform.log("BYRON LOGGING channel: ", channel);
         payload.params.switches = deviceInformationFromWebApi.params.switches;
-        platform.log("BYRON LOGGING switch we are targeting: ", payload.params.switches[channel]);
+        //platform.log("BYRON LOGGING switch we are targeting: ", payload.params.switches[channel]);
         payload.params.switches[channel].switch = targetState;
     } else {
         payload.params.switch = targetState;

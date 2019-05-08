@@ -367,7 +367,7 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
 
     platform.log("BYRON LOGGING switchesAmount ", switchesAmount);
 
-    for (var switchChannel = 0; switchChannel <= switchesAmount; switchChannel++) {
+    for (var switchChannel = 0; switchChannel < switchesAmount; switchChannel++) {
         platform.log("BYRON LOGGING looper ", switchChannel);
         accessory.addService(Service.Switch, device.name + ' CH' + (switchChannel + 1), 'channel-' + switchChannel)
             .getCharacteristic(Characteristic.On)

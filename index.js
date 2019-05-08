@@ -326,8 +326,11 @@ eWeLink.prototype.configureAccessory = function(accessory) {
 eWeLink.prototype.addAccessory = function(device, deviceId = null) {
 
     // Here we need to check if it is currently there
-    this.log("BYRON LOGGING eWeLink.prototype.addAccessory device ", device);
     this.log("BYRON LOGGING eWeLink.prototype.addAccessory deviceId ", deviceId);
+    if (device) {
+        this.log("BYRON LOGGING eWeLink.prototype.addAccessory device.deviceid ", device.deviceid);
+    }
+    
     if (this.accessories.get(deviceId ? deviceId : device.deviceid)) {
         this.log("Not adding [%s] as it already exists in the cache", deviceId ? deviceId : device.deviceid);
         return;
@@ -405,11 +408,11 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     // Used when we receive an update from an external source
 
-    this.log("updatePowerStateCharacteristic deviceId ", deviceId);
+    this.log("BYRON LOGGING updatePowerStateCharacteristic deviceId ", deviceId);
     if (device) {
-        this.log("updatePowerStateCharacteristic device.deviceid ", device.deviceid);
+        this.log("BYRON LOGGING updatePowerStateCharacteristic device.deviceid ", device.deviceid);
     }
-    this.log("updatePowerStateCharacteristic channel ", channel);
+    this.log("BYRON LOGGING updatePowerStateCharacteristic channel ", channel);
 
     let platform = this;
 

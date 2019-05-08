@@ -310,10 +310,10 @@ eWeLink.prototype.configureAccessory = function(accessory) {
         accessory.getService(Service.Switch)
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
-                platform.setPowerState(accessory, value, callback);
+                platform.setPowerState(accessory, 0, value, callback);
             })
             .on('get', function(callback) {
-                platform.getPowerState(accessory, callback);
+                platform.getPowerState(accessory, 0, callback);
             });
 
     }
@@ -368,15 +368,15 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
 
     platform.log("BYRON LOGGING switchesAmount ", switchesAmount);
 
-    for (var i = 1; i <= switchesAmount; i++) {
-        platform.log("BYRON LOGGING looper ", i);
-        accessory.addService(Service.Switch, device.name + ' CH' + i, 'channel-' + i)
+    for (var channel = 0; channel <= switchesAmount; channel++) {
+        platform.log("BYRON LOGGING looper ", channel);
+        accessory.addService(Service.Switch, device.name + ' CH' + (channel + 1), 'channel-' + channel)
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
-                platform.setPowerState(accessory, value, callback);
+                platform.setPowerState(accessory, channel, value, callback);
             })
             .on('get', function(callback) {
-                platform.getPowerState(accessory, callback);
+                platform.getPowerState(accessory, channel, callback);
             });
     }
 
@@ -479,7 +479,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 };
 
 
-eWeLink.prototype.getPowerState = function(accessory, callback) {
+eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
     let platform = this;
 
     if (!this.webClient) {
@@ -488,7 +488,7 @@ eWeLink.prototype.getPowerState = function(accessory, callback) {
         return;
     }
 
-    platform.log("Requesting power state for [%s]", accessory.displayName);
+    platform.log("Requesting power state for [%s] on channel [%s]", accessory.displayName, channel);
 
     this.webClient.get('/api/user/device', function(err, res, body) {
 
@@ -595,7 +595,7 @@ eWeLink.prototype.getPowerState = function(accessory, callback) {
 
 };
 
-eWeLink.prototype.setPowerState = function(accessory, isOn, callback) {
+eWeLink.prototype.setPowerState = function(accessory, channel, isOn, callback) {
 
     let platform = this;
     let options = {};
@@ -603,6 +603,7 @@ eWeLink.prototype.setPowerState = function(accessory, isOn, callback) {
     options.protocolVersion = 13;
 
     platform.log("BYRON LOGGING device: ", accessory);
+    platform.log("BYRON LOGGING channel: ", channel);
 
     let targetState = 'off';
 
@@ -610,7 +611,7 @@ eWeLink.prototype.setPowerState = function(accessory, isOn, callback) {
         targetState = 'on';
     }
 
-    platform.log("Setting power state to [%s] for device [%s]", targetState, accessory.displayName);
+    platform.log("Setting power state to [%s] for device [%s] for channel [%s]", targetState, accessory.displayName, channel);
 
     let payload = {};
     payload.action = 'update';
@@ -619,10 +620,10 @@ eWeLink.prototype.setPowerState = function(accessory, isOn, callback) {
     if(accessory.context.switches > 1) {
         let deviceInformationFromWebApi = platform.devicesFromApi.get(deviceId);
         platform.log("BYRON LOGGING switches: ", deviceInformationFromWebApi.params.switches);
-        platform.log("BYRON LOGGING accessory.context.channel: ", accessory.context.channel);
+        platform.log("BYRON LOGGING accessory.context.channel: ", channel);
         payload.params.switches = deviceInformationFromWebApi.params.switches;
-        platform.log("BYRON LOGGING switch we are targeting: ", payload.params.switches[accessory.context.channel - 1]);
-        payload.params.switches[accessory.context.channel - 1].switch = targetState;
+        platform.log("BYRON LOGGING switch we are targeting: ", payload.params.switches[channel]);
+        payload.params.switches[channel].switch = targetState;
     } else {
         payload.params.switch = targetState;
     }

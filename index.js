@@ -463,8 +463,8 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
         //let ser = accessory.getService(Service.Switch);
         //platform.log("BYRON LOGGING SERVICE ", ser);
 
-        for (var index in accessory.services) {
-            var service = accessory.services[index];
+        for (var i in accessory.services) {
+            var service = accessory.services[i];
             platform.log("BYRON LOGGING service.displayName ", service.displayName);
             platform.log("BYRON LOGGING service.name ", service.name);
             platform.log("BYRON LOGGING service.subtype ", service.subtype);

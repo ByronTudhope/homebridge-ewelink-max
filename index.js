@@ -417,8 +417,6 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
     platform.log("BYRON LOGGING getting device ID: ", deviceId);
     platform.log("BYRON LOGGING getting state: ", state);
 
-    return;
-
     let accessory = platform.accessories.get(deviceId);
     let device = platform.devicesFromApi.get(deviceId);
     let switchesAmount = platform.getDeviceChannelCount(device);

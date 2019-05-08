@@ -514,6 +514,8 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
 
                 if(switchesAmount > 1) {
 
+                    platform.log("BYRON LOGGING switches", device.params.switches);
+
                     if (device.params.switches[channel].switch === 'on') {
                         accessory.reachable = true;
                         platform.log('API reported that [%s] CH%s is On', device.name, (channel + 1));

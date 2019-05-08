@@ -326,10 +326,6 @@ eWeLink.prototype.configureAccessory = function(accessory) {
 eWeLink.prototype.addAccessory = function(device, deviceId = null) {
 
     // Here we need to check if it is currently there
-    this.log("BYRON LOGGING eWeLink.prototype.addAccessory deviceId ", deviceId);
-    if (device) {
-        this.log("BYRON LOGGING eWeLink.prototype.addAccessory device.deviceid ", device.deviceid);
-    }
     
     if (this.accessories.get(deviceId ? deviceId : device.deviceid)) {
         this.log("Not adding [%s] as it already exists in the cache", deviceId ? deviceId : device.deviceid);
@@ -408,12 +404,6 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     // Used when we receive an update from an external source
 
-    this.log("BYRON LOGGING updatePowerStateCharacteristic deviceId ", deviceId);
-    if (device) {
-        this.log("BYRON LOGGING updatePowerStateCharacteristic device.deviceid ", device.deviceid);
-    }
-    this.log("BYRON LOGGING updatePowerStateCharacteristic channel ", channel);
-
     if(deviceId) {
         let id = deviceId.split("CH");
         channel = id[1];
@@ -423,18 +413,11 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
         deviceId = id[0];
     }
 
-    this.log("BYRON LOGGING updatePowerStateCharacteristic channel after split ", channel);
-    this.log("BYRON LOGGING updatePowerStateCharacteristic deviceId after split ", deviceId);
-
     let platform = this;
 
     let isOn = false;
 
     let accessory = platform.accessories.get(deviceId);
-
-/*    this.log("BYRON LOGGING accessory ", accessory);
-    this.log("BYRON LOGGING context ", accessory.context);
-    this.log("BYRON LOGGING services ", accessory.services);*/
 
     if(typeof accessory === 'undefined' && device) {
         platform.log("Can't find device [%s].", deviceId);
@@ -458,22 +441,16 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
     if(accessory.context.switches > 1) {
 
         let index = channel - 1;
-        platform.log("BYRON LOGGING INDEX ", index);
 
         //let ser = accessory.getService(Service.Switch);
-        //platform.log("BYRON LOGGING SERVICE ", ser);
 
-        for (var i in accessory.services) {
+        /*for (var i in accessory.services) {
             var service = accessory.services[i];
-            platform.log("BYRON LOGGING service.displayName ", service.displayName);
-            platform.log("BYRON LOGGING service.name ", service.name);
-            platform.log("BYRON LOGGING service.subtype ", service.subtype);
-        }
+        }*/
 
         /*let service = accessory.services[index];
         if (service) {
             //accessory.getService(Service.Switch).setCharacteristic(Characteristic.On, isOn);
-            //platform.log("BYRON LOGGING service ", service);
             //service.setCharacteristic(Characteristic.On, isOn);
         }*/
 
@@ -882,9 +859,7 @@ eWeLink.prototype.getDeviceChannelCountByType = function (deviceType) {
 
 eWeLink.prototype.getDeviceChannelCount = function (device) {
     let deviceType = this.getDeviceTypeByUiid(device.uiid);
-    this.log('BYRON LOGGING getDeviceChannelCount %s is %s', device.deviceid, deviceType);
     let channels = this.getDeviceChannelCountByType(deviceType);
-    this.log('BYRON LOGGING getDeviceChannelCount channels %s', channels);
     return channels;
 };
 

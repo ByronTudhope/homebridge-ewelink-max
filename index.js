@@ -328,6 +328,7 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
     // Here we need to check if it is currently there
     this.log("BYRON LOGGING eWeLink.prototype.addAccessory device ", device);
     this.log("BYRON LOGGING eWeLink.prototype.addAccessory deviceId ", deviceId);
+    this.log("BYRON LOGGING eWeLink.prototype.addAccessory this.accessories ", this.accessories);
     if (this.accessories.get(deviceId ? deviceId : device.deviceid)) {
         this.log("Not adding [%s] as it already exists in the cache", deviceId ? deviceId : device.deviceid);
         return;

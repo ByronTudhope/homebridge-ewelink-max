@@ -839,8 +839,9 @@ eWeLink.prototype.getDeviceChannelCountByType = function (deviceType) {
 
 eWeLink.prototype.getDeviceChannelCount = function (device) {
     let deviceType = this.getDeviceTypeByUiid(device.uiid);
-    //this.log('Device type for %s is %s', device.uiid, deviceType);
+    this.log('BYRON LOGGING Device type for %s is %s', device.uiid, deviceType);
     let channels = this.getDeviceChannelCountByType(deviceType);
+    this.log('BYRON LOGGING getDeviceChannelCount channels %s', channels);
     return channels;
 };
 

@@ -437,6 +437,8 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
         return;
     }
 
+    this.log("BYRON LOGGING accessory ", accessory);
+
     if (state === 'on') {
         isOn = true;
     }

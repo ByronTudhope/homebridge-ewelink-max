@@ -123,10 +123,6 @@ function eWeLink(log, config, api) {
 
                         let accessory = platform.accessories.get(deviceId);
 
-                        if(accessory.context.switches > 1) {
-                            deviceId = deviceId.replace('CH'+accessory.context.channel,"");
-                        }
-
                         if (platform.devicesFromApi.has(deviceId)) {
                             platform.log('Device [%s] is regeistered with API. Nothing to do.', accessory.displayName);
                         } else {
@@ -173,17 +169,8 @@ function eWeLink(log, config, api) {
 
                         } else {
                             let deviceToAdd = platform.devicesFromApi.get(deviceId);
-                            let switchesAmount = platform.getDeviceChannelCount(deviceToAdd);
-
-                            if(switchesAmount > 1) {
-                                for(let i=0; i!==switchesAmount; i++) {
-                                    platform.log('Device [%s], ID : [%s] will be added', deviceToAdd.name, deviceId + 'CH' + (i+1));
-                                    platform.addAccessory(deviceToAdd, deviceId + 'CH' + (i+1));
-                                }
-                            } else {
-                                platform.log('Device [%s], ID : [%s] will be added', deviceToAdd.name, deviceToAdd.deviceid);
-                                platform.addAccessory(deviceToAdd);
-                            }
+                            platform.log('Device [%s], ID : [%s] will be added', deviceToAdd.name, deviceId);
+                            platform.addAccessory(deviceToAdd);
                         }
                     }
 
@@ -323,7 +310,7 @@ eWeLink.prototype.configureAccessory = function(accessory) {
 };
 
 // Sample function to show how developer can add accessory dynamically from outside event
-eWeLink.prototype.addAccessory = function(device, deviceId = null) {
+eWeLink.prototype.addAccessory = function(device) {
 
     // Here we need to check if it is currently there
     
@@ -340,11 +327,6 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
         return;
     }
 
-    if(deviceId) {
-        let id = deviceId.split("CH");
-        channel = id[1];
-    }
-
     try {   
         const status = channel && device.params.switches && device.params.switches[channel-1] ? device.params.switches[channel-1].switch : device.params.switch || "off";
         this.log("Found Accessory with Name : [%s], Manufacturer : [%s], Status : [%s], Is Online : [%s], API Key: [%s] ", device.name + (channel ? ' CH ' + channel : ''), device.productModel, status, device.online, device.apikey);
@@ -356,12 +338,8 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
 
     accessory.context.deviceId = device.deviceid;
     accessory.context.apiKey = device.apikey;
-    accessory.context.switches = 1;
 
     let switchesAmount = platform.getDeviceChannelCount(device);
-    if (switchesAmount > 1) {
-        accessory.context.switches = switchesAmount;
-    }
 
     accessory.reachable = device.online === 'true';
 
@@ -429,7 +407,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
         platform.log("Can't find device [%s], ignoring.", deviceId);
         return;
         platform.log("Adding accessory for deviceId [%s].", deviceId);
-        platform.addAccessory(device, deviceId);
+        //platform.addAccessory(device, deviceId);
         accessory = platform.accessories.get(deviceId);
     }
 
@@ -446,8 +424,10 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     platform.log("Updating recorded Characteristic.On for [%s] to [%s]. No request will be sent to the device.", accessory.displayName, isOn);
 
-    if(accessory.context.switches > 1) {
-        platform.log("BYRON LOGGING switches more than one: ", accessory.context.switches);
+    let switchesAmount = platform.getDeviceChannelCount(deviceId);
+
+    if(switchesAmount > 1) {
+        platform.log("BYRON LOGGING switches more than one: ", switchesAmount);
 
         let service = accessory.getService(device.name + (channel ? ' CH ' + channel : ''));
 
@@ -514,6 +494,7 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
         }
 
         let deviceId = accessory.context.deviceId;
+        let switchesAmount = platform.getDeviceChannelCount(deviceId);
 
         let filteredResponse = body.filter(device => (device.deviceid === deviceId));
 
@@ -530,7 +511,8 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
                     return;
                 }
 
-                if(accessory.context.switches > 1) {
+
+                if(switchesAmount > 1) {
 
                     if (device.params.switches[channel].switch === 'on') {
                         accessory.reachable = true;
@@ -613,7 +595,8 @@ eWeLink.prototype.setPowerState = function(accessory, channel, isOn, callback) {
     payload.action = 'update';
     payload.userAgent = 'app';
     payload.params = {};
-    if(accessory.context.switches > 1) {
+    let switchesAmount = platform.getDeviceChannelCount(deviceId);
+    if(switchesAmount > 1) {
         let deviceInformationFromWebApi = platform.devicesFromApi.get(deviceId);
         //platform.log("BYRON LOGGING switches: ", deviceInformationFromWebApi.params.switches);
         //platform.log("BYRON LOGGING channel: ", channel);

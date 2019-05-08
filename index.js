@@ -420,7 +420,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
     let accessory = platform.accessories.get(deviceId);
 
     if(typeof accessory === 'undefined' && device) {
-        platform.log("Can't find device [%s].", deviceId);
+        platform.log("Can't find device [%s], ignoring.", deviceId);
         return;
         platform.log("Adding accessory for deviceId [%s].", deviceId);
         platform.addAccessory(device, deviceId);
@@ -440,9 +440,11 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     if(accessory.context.switches > 1) {
 
-        let index = channel - 1;
+        accessory.getService(device.name + (channel ? ' CH ' + channel : '')).setCharacteristic(Characteristic.On, isOn);
 
-        //let ser = accessory.getService(Service.Switch);
+/*        let index = channel - 1;
+
+        let ser = accessory.getService(device.name + (channel ? ' CH ' + channel : ''));*/
 
         /*for (var i in accessory.services) {
             var service = accessory.services[i];

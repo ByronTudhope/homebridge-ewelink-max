@@ -219,7 +219,7 @@ function eWeLink(log, config, api) {
                                     json.params.switches.forEach(function (entry) {
                                         if (entry.hasOwnProperty('outlet') && entry.hasOwnProperty('switch')) {
                                             platform.log("BYRON LOGGING entry ", entry);
-                                            //platform.updatePowerStateCharacteristic(json.deviceid, entry.outlet, entry.switch);
+                                            platform.updatePowerStateCharacteristic(json.deviceid, entry.outlet, entry.switch);
                                         }
                                     });
                                 }
@@ -455,7 +455,10 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, channel, s
 
         platform.log("BYRON LOGGING service: ", service);
 
-        service.setCharacteristic(Characteristic.On, isOn);
+        if (service) {
+            service.setCharacteristic(Characteristic.On, isOn);
+        }
+
     } else {
         accessory.getService(Service.Switch)
             .setCharacteristic(Characteristic.On, isOn);

@@ -417,6 +417,9 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
     if(deviceId) {
         let id = deviceId.split("CH");
         channel = id[1];
+        if (!channel) {
+            channel = null;
+        }
         deviceId = id[0];
     }
 
@@ -432,8 +435,6 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 /*    this.log("BYRON LOGGING accessory ", accessory);
     this.log("BYRON LOGGING context ", accessory.context);
     this.log("BYRON LOGGING services ", accessory.services);*/
-
-    return;
 
     if(typeof accessory === 'undefined' && device) {
         platform.log("Can't find device [%s].", deviceId);

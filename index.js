@@ -446,14 +446,12 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, channel, s
     let switchesAmount = platform.getDeviceChannelCount(device);
 
     if(switchesAmount > 1) {
-        platform.log("BYRON LOGGING switches more than one: ", switchesAmount);
-        platform.log("BYRON LOGGING Service.Switch: ", Service.Switch);
-        platform.log("BYRON LOGGING Service.Switch.UUID: ", Service.Switch.UUID);
         platform.log("BYRON LOGGING channel: ", 'channel-' + channel);
 
         let service = accessory.getServiceByUUIDAndSubType(Service.Switch.UUID, 'channel-' + channel);
 
         if (service) {
+            platform.log("BYRON LOGGING service set: true");
             service.setCharacteristic(Characteristic.On, isOn);
         }
 

@@ -417,14 +417,18 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
     if(deviceId) {
         let id = deviceId.split("CH");
         channel = id[1];
-        deviceId = id[0];
+        //deviceId = id[0];
     }
+
+    this.log("BYRON LOGGING updatePowerStateCharacteristic channel after split ", channel);
 
     let platform = this;
 
     let isOn = false;
 
     let accessory = platform.accessories.get(deviceId);
+
+    this.log("BYRON LOGGING accessory ", accessory);
 
     if(typeof accessory === 'undefined' && device) {
         platform.log("Adding accessory for deviceId [%s].", deviceId);
@@ -436,8 +440,6 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
         platform.log("Error updating non-exist accessory with deviceId [%s].", deviceId);
         return;
     }
-
-    this.log("BYRON LOGGING accessory ", accessory);
 
     if (state === 'on') {
         isOn = true;

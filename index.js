@@ -620,8 +620,8 @@ eWeLink.prototype.setPowerState = function(accessory, isOn, callback) {
         let deviceInformationFromWebApi = platform.devicesFromApi.get(deviceId);
         platform.log("BYRON LOGGING switches: ", deviceInformationFromWebApi.params.switches);
         platform.log("BYRON LOGGING accessory.context.channel: ", accessory.context.channel);
-        platform.log("BYRON LOGGING switch we are targeting: ", payload.params.switches[accessory.context.channel - 1]);
         payload.params.switches = deviceInformationFromWebApi.params.switches;
+        platform.log("BYRON LOGGING switch we are targeting: ", payload.params.switches[accessory.context.channel - 1]);
         payload.params.switches[accessory.context.channel - 1].switch = targetState;
     } else {
         payload.params.switch = targetState;

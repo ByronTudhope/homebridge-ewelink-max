@@ -596,6 +596,8 @@ eWeLink.prototype.getPowerState = function(accessory, callback) {
 };
 
 eWeLink.prototype.setPowerState = function(accessory, isOn, callback) {
+
+    platform.log("BYRON LOGGING device: ", accessory);
     let platform = this;
     let options = {};
     let deviceId = accessory.context.deviceId;

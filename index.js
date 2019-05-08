@@ -372,12 +372,12 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
         accessory.addService(Service.Switch, device.name + ' CH' + (switchChannel + 1), 'channel-' + switchChannel)
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
-                platform.log("BYRON LOGGING set ", switchChannel);
-                platform.setPowerState(accessory, switchChannel, value, callback);
+                platform.log("BYRON LOGGING set ", switchChannel - 1);
+                platform.setPowerState(accessory, switchChannel - 1, value, callback);
             })
             .on('get', function(callback) {
-                platform.log("BYRON LOGGING get ", switchChannel);
-                platform.getPowerState(accessory, switchChannel, callback);
+                platform.log("BYRON LOGGING get ", switchChannel - 1);
+                platform.getPowerState(accessory, switchChannel - 1, callback);
             });
     }
 

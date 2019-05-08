@@ -357,7 +357,7 @@ eWeLink.prototype.addAccessory = function(device) {
                 platform.getPowerState(accessory, "0", callback);
             });
     } else if (switchesAmount == 2) {
-        accessory.addService(Service.Switch, device.name, 'channel-0')
+        accessory.addService(Service.Switch, device.name + " CH1", 'channel-0')
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
                 platform.log("BYRON LOGGING set ", "0");
@@ -367,7 +367,7 @@ eWeLink.prototype.addAccessory = function(device) {
                 platform.log("BYRON LOGGING get ", "0");
                 platform.getPowerState(accessory, "0", callback);
             });
-        accessory.addService(Service.Switch, device.name, 'channel-1')
+        accessory.addService(Service.Switch, device.name + " CH2", 'channel-1')
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
                 platform.log("BYRON LOGGING set ", "1");
@@ -440,34 +440,18 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, channel, s
         isOn = true;
     }
 
-    platform.log("Updating recorded Characteristic.On for [%s] to [%s]. No request will be sent to the device.", accessory.displayName, isOn);
+    platform.log("Updating recorded Characteristic.On for [%s], channel [%s] to [%s]. No request will be sent to the device.", accessory.displayName, channel, isOn);
     let device = platform.devicesFromApi.get(deviceId);
     let switchesAmount = platform.getDeviceChannelCount(device);
 
     if(switchesAmount > 1) {
         platform.log("BYRON LOGGING switches more than one: ", switchesAmount);
 
-        let service = accessory.getServiceByUUIDAndSubType(device.name + ' CH' + (channel + 1), 'channel-' + channel);
+        let service = accessory.getServiceByUUIDAndSubType(Service.Switch.UUID, 'channel-' + channel);
 
         platform.log("BYRON LOGGING service: ", service);
 
         service.setCharacteristic(Characteristic.On, isOn);
-
-/*        let index = channel - 1;
-
-        let ser = accessory.getService(device.name + (channel ? ' CH ' + channel : ''));*/
-
-        /*for (var i in accessory.services) {
-            var service = accessory.services[i];
-        }*/
-
-        /*let service = accessory.services[index];
-        if (service) {
-            //accessory.getService(Service.Switch).setCharacteristic(Characteristic.On, isOn);
-            //service.setCharacteristic(Characteristic.On, isOn);
-        }*/
-
-        //payload.params.switches[accessory.context.channel - 1].switch = targetState;
     } else {
         accessory.getService(Service.Switch)
             .setCharacteristic(Characteristic.On, isOn);

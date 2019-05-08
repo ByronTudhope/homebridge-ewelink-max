@@ -157,14 +157,10 @@ function eWeLink(log, config, api) {
 
                             if(switchesAmount > 1) {
                                 platform.log(switchesAmount + " channels device has been set: " + deviceInformationFromWebApi.extra.extra.model + ' uiid: ' + deviceInformationFromWebApi.uiid);
-                                for(let i=0; i<switchesAmount; i++) {
-                                    accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Name, deviceInformationFromWebApi.name + ' CH ' + (i+1));
-                                    platform.updatePowerStateCharacteristic(deviceId, i, deviceInformationFromWebApi.params.switches[i].switch);
-                                }
+                                platform.updatePowerStateCharacteristic(deviceId, deviceInformationFromWebApi.params.switches);
                             } else  {
                                 platform.log("Single channel device has been set: " + deviceInformationFromWebApi.extra.extra.model + ' uiid: ' + deviceInformationFromWebApi.uiid);
-                                accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Name, deviceInformationFromWebApi.name);
-                                platform.updatePowerStateCharacteristic(deviceId, 0, deviceInformationFromWebApi.params.switch);
+                                platform.updatePowerStateCharacteristic(deviceId, deviceInformationFromWebApi.params.switch);
                             }
 
                         } else {
@@ -214,14 +210,9 @@ function eWeLink(log, config, api) {
                                 platform.log("Update message received for device [%s]", json.deviceid);
 
                                 if (json.hasOwnProperty("params") && json.params.hasOwnProperty("switch")) {
-                                    platform.updatePowerStateCharacteristic(json.deviceid, 0, json.params.switch);
+                                    platform.updatePowerStateCharacteristic(json.deviceid, json.params.switch);
                                 } else if (json.hasOwnProperty("params") && json.params.hasOwnProperty("switches") && Array.isArray(json.params.switches)) {
-                                    json.params.switches.forEach(function (entry) {
-                                        if (entry.hasOwnProperty('outlet') && entry.hasOwnProperty('switch')) {
-                                            platform.log("BYRON LOGGING entry ", entry);
-                                            platform.updatePowerStateCharacteristic(json.deviceid, entry.outlet, entry.switch);
-                                        }
-                                    });
+                                    platform.updatePowerStateCharacteristic(json.deviceid, json.params.switches);
                                 }
 
                             }
@@ -418,31 +409,27 @@ eWeLink.prototype.getSequence = function() {
     return this.sequence;
 };
 
-eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, channel, state) {
+eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
 
     // Used when we receive an update from an external source
 
     let platform = this;
-
-    let isOn = false;
-
     platform.log("BYRON LOGGING getting device ID: ", deviceId);
+    platform.log("BYRON LOGGING getting state: ", state);
+
+    return;
 
     let accessory = platform.accessories.get(deviceId);
+    let device = platform.devicesFromApi.get(deviceId);
+    let switchesAmount = platform.getDeviceChannelCount(device);
 
     if (!accessory) {
         platform.log("Error updating non-exist accessory with deviceId [%s].", deviceId);
         return;
     }
 
-    if (state === 'on') {
-        isOn = true;
-    }
-
-    platform.log("Updating recorded Characteristic.On for [%s], channel [%s] to [%s]. No request will be sent to the device.", accessory.displayName, channel, isOn);
-    let device = platform.devicesFromApi.get(deviceId);
-    let switchesAmount = platform.getDeviceChannelCount(device);
-
+    platform.log("Updating recorded Characteristic.On for [%s], to.", accessory.displayName, state);
+    
     if(switchesAmount > 1) {
         if (channel < switchesAmount) {
             let channelString = 'channel-' + channel;

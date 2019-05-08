@@ -345,19 +345,54 @@ eWeLink.prototype.addAccessory = function(device) {
 
     platform.log("BYRON LOGGING switchesAmount ", switchesAmount);
 
-    for (var switchChannel = 0; switchChannel < switchesAmount; switchChannel++) {
-        platform.log("BYRON LOGGING looper ", switchChannel);
-        accessory.addService(Service.Switch, device.name + ' CH' + (switchChannel + 1), 'channel-' + switchChannel)
+    if (switchesAmount == 1) {
+        accessory.addService(Service.Switch, device.name, 'channel-0')
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
-                platform.log("BYRON LOGGING set ", switchChannel - 1);
-                platform.setPowerState(accessory, switchChannel - 1, value, callback);
+                platform.log("BYRON LOGGING set ", "0");
+                platform.setPowerState(accessory, "0", value, callback);
             })
             .on('get', function(callback) {
-                platform.log("BYRON LOGGING get ", switchChannel - 1);
-                platform.getPowerState(accessory, switchChannel - 1, callback);
+                platform.log("BYRON LOGGING get ", "0");
+                platform.getPowerState(accessory, "0", callback);
             });
+    } else if (switchesAmount == 2) {
+        accessory.addService(Service.Switch, device.name, 'channel-0')
+            .getCharacteristic(Characteristic.On)
+            .on('set', function(value, callback) {
+                platform.log("BYRON LOGGING set ", "0");
+                platform.setPowerState(accessory, "0", value, callback);
+            })
+            .on('get', function(callback) {
+                platform.log("BYRON LOGGING get ", "0");
+                platform.getPowerState(accessory, "0", callback);
+            });
+        accessory.addService(Service.Switch, device.name, 'channel-1')
+            .getCharacteristic(Characteristic.On)
+            .on('set', function(value, callback) {
+                platform.log("BYRON LOGGING set ", "1");
+                platform.setPowerState(accessory, "1", value, callback);
+            })
+            .on('get', function(callback) {
+                platform.log("BYRON LOGGING get ", "1");
+                platform.getPowerState(accessory, "1", callback);
+            });
+    } else {
+        for (var switchChannel = 0; switchChannel < switchesAmount; switchChannel++) {
+            accessory.addService(Service.Switch, device.name + ' CH' + (switchChannel + 1), 'channel-' + switchChannel)
+                .getCharacteristic(Characteristic.On)
+                .on('set', function(value, callback) {
+                    platform.log("BYRON LOGGING set ", switchChannel);
+                    platform.setPowerState(accessory, switchChannel, value, callback);
+                })
+                .on('get', function(callback) {
+                    platform.log("BYRON LOGGING get ", switchChannel);
+                    platform.getPowerState(accessory, switchChannel, callback);
+                });
+        }
     }
+
+
 
     accessory.on('identify', function(paired, callback) {
         platform.log(accessory.displayName, "Identify not supported");

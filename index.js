@@ -211,7 +211,7 @@ function eWeLink(log, config, api) {
 
                             if (json.action === 'update') {
 
-                                //platform.log("Update message received for device [%s]", json.deviceid);
+                                platform.log("Update message received for device [%s]", json.deviceid);
 
                                 if (json.hasOwnProperty("params") && json.params.hasOwnProperty("switch")) {
                                     platform.updatePowerStateCharacteristic(json.deviceid, 0, json.params.switch);
@@ -452,8 +452,6 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, channel, s
         platform.log("BYRON LOGGING channel: ", 'channel-' + channel);
 
         let service = accessory.getServiceByUUIDAndSubType(Service.Switch.UUID, 'channel-' + channel);
-
-        platform.log("BYRON LOGGING service: ", service);
 
         if (service) {
             service.setCharacteristic(Characteristic.On, isOn);

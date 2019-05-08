@@ -380,11 +380,11 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
         callback();
     });
 
-/*    accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.SerialNumber, device.extra.extra.mac);
+    accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.SerialNumber, device.extra.extra.mac);
     accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Manufacturer, device.productModel);
     accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Model, device.extra.extra.model);
     accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Identify, false);
-    accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.FirmwareRevision, device.params.fwVersion);*/
+    accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.FirmwareRevision, device.params.fwVersion);
 
     let switchesAmount = platform.getDeviceChannelCount(device);
     if (switchesAmount > 1) {
@@ -465,7 +465,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
         let service = accessory.services[index];
         if (service) {
-            platform.log("BYRON LOGGING service ", service);
+            //platform.log("BYRON LOGGING service ", service);
             service.setCharacteristic(Characteristic.On, isOn);
         }
 

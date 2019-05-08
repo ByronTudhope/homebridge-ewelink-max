@@ -414,6 +414,12 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
     }
     this.log("BYRON LOGGING updatePowerStateCharacteristic channel ", channel);
 
+    if(deviceId) {
+        let id = deviceId.split("CH");
+        channel = id[1];
+        deviceId = id[0];
+    }
+
     let platform = this;
 
     let isOn = false;

@@ -441,7 +441,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
                     if (entry.switch == 'on') {
                         isOn = true;
                     }
-                    prototype.setPowerState(accessory, channel, isOn, function(error) {
+                    platform.setPowerState(accessory, channel, isOn, function(error) {
                         if (error) {
                             platform.log("BYRON LOGGING error ", error);
                         }

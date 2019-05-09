@@ -441,23 +441,18 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
                     if (entry.switch == 'on') {
                         isOn = true;
                     }
-                    platform.setPowerState(accessory, channel, isOn, function(error) {
-                        if (error) {
-                            platform.log("BYRON LOGGING error ", error);
-                        }
-                    });
-                    //accessory.services[channel + 1].setCharacteristic(Characteristic.On, isOn);
-                    /*var channelString = 'channel-' + channel;
+                    accessory.services[channel + 1].setCharacteristic(Characteristic.On, isOn);
+                    var channelString = 'channel-' + channel;
                     platform.log("BYRON LOGGING channel: ", channelString);
                     var service = accessory.getServiceByUUIDAndSubType(Service.Switch, channelString);
                     if (service) {
                         platform.log("BYRON LOGGING service set: true");
-                        service.setCharacteristic(Characteristic.On, isOn);
+                        service.updateCharacteristic(Characteristic.On, isOn);
                     } else {
                         platform.log("BYRON LOGGING service set: false");
                         platform.log("BYRON LOGGING Service.Switch.UUID ", Service.Switch.UUID);
                         platform.log("BYRON LOGGING service set: false");
-                    }*/
+                    }
                 } else {
                     platform.log("BYRON LOGGING channel greater than switches amount");
                 }
@@ -470,7 +465,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
             isOn = true;
         }
         accessory.getService(Service.Switch)
-            .setCharacteristic(Characteristic.On, isOn);
+            .updateCharacteristic(Characteristic.On, isOn);
     }
 
 };

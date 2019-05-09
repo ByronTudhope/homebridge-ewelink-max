@@ -429,8 +429,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
     platform.log("Updating recorded Characteristic.On for [%s], to.", accessory.displayName, state);
     
     if(switchesAmount > 1) {
-
-        state.forEach(setTimeout(function (entry) {
+        state.forEach(function (entry) {
             if (entry.hasOwnProperty('outlet') && entry.hasOwnProperty('switch')) {
                 platform.log("BYRON LOGGING entry ", entry);
                 var channel = entry.outlet;
@@ -441,20 +440,24 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
                     }
                     var channelString = 'channel-' + channel;
                     platform.log("BYRON LOGGING channel: ", channelString);
-                    var service = accessory.getServiceByUUIDAndSubType(Service.Switch, channelString);
-                    if (service) {
-                        platform.log("BYRON LOGGING service set: true");
-                        service.setCharacteristic(Characteristic.On, isOn);
-                    } else {
-                        platform.log("BYRON LOGGING service set: false");
-                        platform.log("BYRON LOGGING Service.Switch.UUID ", Service.Switch.UUID);
-                        platform.log("BYRON LOGGING service set: false");
-                    }
+
+                    setTimeout(function(){ 
+                        var service = accessory.getServiceByUUIDAndSubType(Service.Switch, channelString);
+                        if (service) {
+                            platform.log("BYRON LOGGING service set: true");
+                            service.setCharacteristic(Characteristic.On, isOn);
+                        } else {
+                            platform.log("BYRON LOGGING service set: false");
+                            platform.log("BYRON LOGGING Service.Switch.UUID ", Service.Switch.UUID);
+                            platform.log("BYRON LOGGING service set: false");
+                        }
+                    }, 1000); 
+                    
                 } else {
                     platform.log("BYRON LOGGING channel greater than switches amount");
                 }
             }
-        }), 1000);
+        });
         
     } else {
         var isOn = false;

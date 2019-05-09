@@ -429,8 +429,6 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
 
     platform.log("BYRON LOGGING accessory: ", accessory);
 
-    return;
-
     platform.log("Updating recorded Characteristic.On for [%s], to.", accessory.displayName, state);
     
     if(switchesAmount > 1) {

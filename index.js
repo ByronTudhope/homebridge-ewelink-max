@@ -443,7 +443,8 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
                     if (entry.switch == 'on') {
                         isOn = true;
                     }
-                    var channelString = 'channel-' + channel;
+                    accessory.services[channel + 1].setCharacteristic(Characteristic.On, isOn);
+                    /*var channelString = 'channel-' + channel;
                     platform.log("BYRON LOGGING channel: ", channelString);
                     var service = accessory.getServiceByUUIDAndSubType(Service.Switch, channelString);
                     if (service) {
@@ -453,7 +454,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
                         platform.log("BYRON LOGGING service set: false");
                         platform.log("BYRON LOGGING Service.Switch.UUID ", Service.Switch.UUID);
                         platform.log("BYRON LOGGING service set: false");
-                    }
+                    }*/
                 } else {
                     platform.log("BYRON LOGGING channel greater than switches amount");
                 }

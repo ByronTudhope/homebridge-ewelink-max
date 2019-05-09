@@ -429,7 +429,8 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
     platform.log("Updating recorded Characteristic.On for [%s], to.", accessory.displayName, state);
     
     if(switchesAmount > 1) {
-        state.forEach(function (entry) {
+
+        state.forEach(setTimeout(function (entry) {
             if (entry.hasOwnProperty('outlet') && entry.hasOwnProperty('switch')) {
                 platform.log("BYRON LOGGING entry ", entry);
                 var channel = entry.outlet;
@@ -453,7 +454,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
                     platform.log("BYRON LOGGING channel greater than switches amount");
                 }
             }
-        });
+        }, 1000));
         
     } else {
         var isOn = false;

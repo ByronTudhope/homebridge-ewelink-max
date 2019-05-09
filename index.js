@@ -454,7 +454,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
                     platform.log("BYRON LOGGING channel greater than switches amount");
                 }
             }
-        }, 1000));
+        }), 1000);
         
     } else {
         var isOn = false;

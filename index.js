@@ -434,29 +434,36 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
                 platform.log("BYRON LOGGING entry ", entry);
                 var channel = entry.outlet;
                 if (channel < switchesAmount) {
-                    var isOn = false;
-                    if (entry.switch == 'on') {
-                        isOn = true;
-                    }
-                    var channelString = 'channel-' + channel;
-                    platform.log("BYRON LOGGING channel: ", channelString);
-
-                    setTimeout(function(){ 
-                        var service = accessory.getServiceByUUIDAndSubType(Service.Switch, channelString);
-                        if (service) {
-                            platform.log("BYRON LOGGING service set: true");
-                            service.setCharacteristic(Characteristic.On, isOn);
-                        } else {
-                            platform.log("BYRON LOGGING service set: false");
-                            platform.log("BYRON LOGGING Service.Switch.UUID ", Service.Switch.UUID);
-                            platform.log("BYRON LOGGING service set: false");
+                    platform.getPowerState(accessory, channel, function(error, oldState) {
+                        if (error) {
+                            platform.log("BYRON LOGGING error: ", error);
+                            return;
                         }
-                    }, 1000); 
+                        var isOn = false;
+                        if (entry.switch == 'on') {
+                            isOn = true;
+                        }
+
+                        if (oldState != isOn) {
+                            var channelString = 'channel-' + channel;
+                            platform.log("BYRON LOGGING channel: ", channelString);
+                            var service = accessory.getServiceByUUIDAndSubType(Service.Switch, channelString);
+                            if (service) {
+                                platform.log("BYRON LOGGING service set: true");
+                                service.setCharacteristic(Characteristic.On, isOn);
+                            } else {
+                                platform.log("BYRON LOGGING service set: false");
+                                platform.log("BYRON LOGGING Service.Switch.UUID ", Service.Switch.UUID);
+                                platform.log("BYRON LOGGING service set: false");
+                            }
+                        }
+                    });
                     
                 } else {
                     platform.log("BYRON LOGGING channel greater than switches amount");
                 }
             }
+            return;
         });
         
     } else {

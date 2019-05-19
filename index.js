@@ -413,7 +413,6 @@ eWeLink.prototype.getSequence = function() {
 eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
 
     // Used when we receive an update from an external source
-
     let platform = this;
 
     let accessory = platform.accessories.get(deviceId);
@@ -426,10 +425,18 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
     }
 
     platform.log("Updating recorded Characteristic.On for [%s], to.", accessory.displayName, state);
-    
-    if(switchesAmount < 1) {
 
-    } else if(switchesAmount > 1) {
+    if (switchesAmount == 0) {
+        //Don't do anything, no switches
+    } else if (switchesAmount == 1) {
+        var isOn = false;
+        if (state == 'on') {
+            isOn = true;
+        }
+        if (accessory.getService(Service.Switch)) {
+            accessory.getService(Service.Switch).updateCharacteristic(Characteristic.On, isOn);
+        }
+    } else if (switchesAmount == 2) {
         state.forEach(function (entry) {
             if (entry.hasOwnProperty('outlet') && entry.hasOwnProperty('switch')) {
                 var channel = entry.outlet;
@@ -438,28 +445,16 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
                     if (entry.switch == 'on') {
                         isOn = true;
                     }
-                    accessory.services[channel + 1].setCharacteristic(Characteristic.On, isOn);
                     var channelString = 'channel-' + channel;
                     var service = accessory.getServiceByUUIDAndSubType(Service.Switch, channelString);
                     if (service) {
                         service.updateCharacteristic(Characteristic.On, isOn);
-                    } else {
-                        
                     }
-                } else {
-                    platform.log("BYRON LOGGING channel greater than switches amount");
                 }
             }
         });
-        
     } else {
-        var isOn = false;
-        if (state == 'on') {
-            isOn = true;
-        }
-        if (accessory.getService(Service.Switch)) {
-            accessory.getService(Service.Switch).updateCharacteristic(Characteristic.On, isOn);
-        }
+        //only up to two channel switches supported
     }
 
 };

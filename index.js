@@ -286,7 +286,7 @@ eWeLink.prototype.configureAccessory = function(accessory) {
 
     let platform = this;
 
-    var service = accessory.getServiceByUUIDAndSubType(Service.Switch, 'channel-0');
+    var service = accessory.getServiceByUUIDAndSubType(Service.Lightbulb, 'channel-0');
 
     if (service) {
        service.getCharacteristic(Characteristic.On)
@@ -298,7 +298,7 @@ eWeLink.prototype.configureAccessory = function(accessory) {
                 }); 
     }
 
-    var service2 = accessory.getServiceByUUIDAndSubType(Service.Switch, 'channel-1');
+    var service2 = accessory.getServiceByUUIDAndSubType(Service.Lightbulb, 'channel-1');
 
     if (service2) {
        service2.getCharacteristic(Characteristic.On)
@@ -349,7 +349,7 @@ eWeLink.prototype.addAccessory = function(device) {
     accessory.reachable = device.online === 'true';
 
     if (switchesAmount == 1) {
-        accessory.addService(Service.Switch, device.name, 'channel-0')
+        accessory.addService(Service.Lightbulb, device.name, 'channel-0')
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
                 platform.setPowerState(accessory, "0", value, callback);
@@ -358,7 +358,7 @@ eWeLink.prototype.addAccessory = function(device) {
                 platform.getPowerState(accessory, "0", callback);
             });
     } else if (switchesAmount == 2) {
-        accessory.addService(Service.Switch, device.name + " CH1", 'channel-0')
+        accessory.addService(Service.Lightbulb, device.name + " CH1", 'channel-0')
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
                 platform.setPowerState(accessory, "0", value, callback);
@@ -366,7 +366,7 @@ eWeLink.prototype.addAccessory = function(device) {
             .on('get', function(callback) {
                 platform.getPowerState(accessory, "0", callback);
             });
-        accessory.addService(Service.Switch, device.name + " CH2", 'channel-1')
+        accessory.addService(Service.Lightbulb, device.name + " CH2", 'channel-1')
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
                 platform.setPowerState(accessory, "1", value, callback);
@@ -375,8 +375,9 @@ eWeLink.prototype.addAccessory = function(device) {
                 platform.getPowerState(accessory, "1", callback);
             });
     } else {
+        platform.log('BYRON LOGGING ', accessory);
         for (var switchChannel = 0; switchChannel < switchesAmount; switchChannel++) {
-            accessory.addService(Service.Switch, device.name + ' CH' + (switchChannel + 1), 'channel-' + switchChannel)
+            accessory.addService(Service.Lightbulb, device.name + ' CH' + (switchChannel + 1), 'channel-' + switchChannel)
                 .getCharacteristic(Characteristic.On)
                 .on('set', function(value, callback) {
                     platform.setPowerState(accessory, switchChannel, value, callback);
@@ -433,8 +434,8 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
         if (state == 'on') {
             isOn = true;
         }
-        if (accessory.getService(Service.Switch)) {
-            accessory.getService(Service.Switch).updateCharacteristic(Characteristic.On, isOn);
+        if (accessory.getService(Service.Lightbulb)) {
+            accessory.getService(Service.Lightbulb).updateCharacteristic(Characteristic.On, isOn);
         }
     } else if (switchesAmount == 2) {
         state.forEach(function (entry) {
@@ -446,7 +447,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
                         isOn = true;
                     }
                     var channelString = 'channel-' + channel;
-                    var service = accessory.getServiceByUUIDAndSubType(Service.Switch, channelString);
+                    var service = accessory.getServiceByUUIDAndSubType(Service.Lightbulb, channelString);
                     if (service) {
                         service.updateCharacteristic(Characteristic.On, isOn);
                     }
@@ -852,13 +853,15 @@ eWeLink.prototype.getDeviceChannelCountByType = function (deviceType) {
         SOCKET_4: 4,
         GSM_SOCKET_4: 4,
         SWITCH_4: 4,
-        CUN_YOU_DOOR: 4
+        CUN_YOU_DOOR: 4,
+        SINGLE_CHANNEL_DIMMER_SWITCH: 1
     };
     return DEVICE_CHANNEL_LENGTH[deviceType] || 0;
 };
 
 eWeLink.prototype.getDeviceChannelCount = function (device) {
     let deviceType = this.getDeviceTypeByUiid(device.uiid);
+    this.log('BYRON LOGGING ', deviceType);
     let channels = this.getDeviceChannelCountByType(deviceType);
     return channels;
 };

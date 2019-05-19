@@ -296,10 +296,22 @@ eWeLink.prototype.configureAccessory = function(accessory) {
 
     let platform = this;
 
-    var service = accessory.getServiceByUUIDAndSubType(Service.Lightbulb, 'channel-0');
+    var service_switch_1 = accessory.getServiceByUUIDAndSubType(Service.Switch, 'channel-0');
 
-    if (service) {
-       service.getCharacteristic(Characteristic.On)
+    if (service_switch_1) {
+       service_switch_1.getCharacteristic(Characteristic.On)
+                .on('set', function(value, callback) {
+                    platform.setPowerState(accessory, 0, value, callback);
+                })
+                .on('get', function(callback) {
+                    platform.getPowerState(accessory, 0, callback);
+                });
+    }
+
+    var service_bulb = accessory.getServiceByUUIDAndSubType(Service.Lightbulb, 'channel-0');
+
+    if (service_bulb) {
+       service_bulb.getCharacteristic(Characteristic.On)
                 .on('set', function(value, callback) {
                     platform.setPowerState(accessory, 0, value, callback);
                 })
@@ -307,7 +319,7 @@ eWeLink.prototype.configureAccessory = function(accessory) {
                     platform.getPowerState(accessory, 0, callback);
                 });
 
-        characteristic = service.getCharacteristic(Characteristic.Brightness);
+        characteristic = service_bulb.getCharacteristic(Characteristic.Brightness);
         if (characteristic) {
             characteristic.on('set', function(value, callback) {
                     platform.setBrightness(accessory, "0", value, callback);
@@ -318,10 +330,11 @@ eWeLink.prototype.configureAccessory = function(accessory) {
         }
     }
 
-    var service2 = accessory.getServiceByUUIDAndSubType(Service.Lightbulb, 'channel-1');
 
-    if (service2) {
-       service2.getCharacteristic(Characteristic.On)
+    var service_switch_2 = accessory.getServiceByUUIDAndSubType(Service.Switch, 'channel-1');
+
+    if (service_switch_2) {
+       service_switch_2.getCharacteristic(Characteristic.On)
                 .on('set', function(value, callback) {
                     platform.setPowerState(accessory, 1, value, callback);
                 })
@@ -370,17 +383,15 @@ eWeLink.prototype.addAccessory = function(device) {
     accessory.reachable = device.online === 'true';
 
     if (switchesAmount == 1) {
-
-        accessory.addService(Service.Lightbulb, device.name, 'channel-0')
-            .getCharacteristic(Characteristic.On)
-            .on('set', function(value, callback) {
-                platform.setPowerState(accessory, "0", value, callback);
-            })
-            .on('get', function(callback) {
-                platform.getPowerState(accessory, "0", callback);
-            });
-        
         if (dimmable) {
+            accessory.addService(Service.Lightbulb, device.name, 'channel-0')
+                .getCharacteristic(Characteristic.On)
+                .on('set', function(value, callback) {
+                    platform.setPowerState(accessory, "0", value, callback);
+                })
+                .on('get', function(callback) {
+                    platform.getPowerState(accessory, "0", callback);
+                });
             accessory.getService(Service.Lightbulb, device.name, 'channel-0')
                 .addCharacteristic(Characteristic.Brightness)
                 .on('set', function(value, callback) {
@@ -389,9 +400,18 @@ eWeLink.prototype.addAccessory = function(device) {
                 .on('get', function(callback) {
                     platform.getBrightness(accessory, "0", callback);
                 }); 
+        } else {
+            accessory.addService(Service.Switch, device.name, 'channel-0')
+                .getCharacteristic(Characteristic.On)
+                .on('set', function(value, callback) {
+                    platform.setPowerState(accessory, "0", value, callback);
+                })
+                .on('get', function(callback) {
+                    platform.getPowerState(accessory, "0", callback);
+                });
         }
     } else if (switchesAmount == 2) {
-        accessory.addService(Service.Lightbulb, device.name + " CH1", 'channel-0')
+        accessory.addService(Service.Switch, device.name + " CH1", 'channel-0')
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
                 platform.setPowerState(accessory, "0", value, callback);
@@ -399,7 +419,7 @@ eWeLink.prototype.addAccessory = function(device) {
             .on('get', function(callback) {
                 platform.getPowerState(accessory, "0", callback);
             });
-        accessory.addService(Service.Lightbulb, device.name + " CH2", 'channel-1')
+        accessory.addService(Service.Switch, device.name + " CH2", 'channel-1')
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
                 platform.setPowerState(accessory, "1", value, callback);
@@ -410,7 +430,7 @@ eWeLink.prototype.addAccessory = function(device) {
     } else {
         platform.log('BYRON LOGGING ', accessory);
         for (var switchChannel = 0; switchChannel < switchesAmount; switchChannel++) {
-            accessory.addService(Service.Lightbulb, device.name + ' CH' + (switchChannel + 1), 'channel-' + switchChannel)
+            accessory.addService(Service.Switch, device.name + ' CH' + (switchChannel + 1), 'channel-' + switchChannel)
                 .getCharacteristic(Characteristic.On)
                 .on('set', function(value, callback) {
                     platform.setPowerState(accessory, switchChannel, value, callback);
@@ -452,6 +472,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
     let accessory = platform.accessories.get(deviceId);
     let device = platform.devicesFromApi.get(deviceId);
     let switchesAmount = platform.getDeviceChannelCount(device);
+    let dimmable = platform.getDeviceDimmable(device);
 
     if (!accessory) {
         platform.log("Error updating non-exist accessory with deviceId [%s].", deviceId);
@@ -467,9 +488,16 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
         if (state == 'on') {
             isOn = true;
         }
-        if (accessory.getService(Service.Lightbulb)) {
-            accessory.getService(Service.Lightbulb).updateCharacteristic(Characteristic.On, isOn);
+        if (dimmable) {
+            if (accessory.getService(Service.Lightbulb)) {
+                accessory.getService(Service.Lightbulb).updateCharacteristic(Characteristic.On, isOn);
+            }
+        } else {
+            if (accessory.getService(Service.Switch)) {
+                accessory.getService(Service.Switch).updateCharacteristic(Characteristic.On, isOn);
+            }
         }
+        
     } else if (switchesAmount == 2) {
         state.forEach(function (entry) {
             if (entry.hasOwnProperty('outlet') && entry.hasOwnProperty('switch')) {
@@ -480,7 +508,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
                         isOn = true;
                     }
                     var channelString = 'channel-' + channel;
-                    var service = accessory.getServiceByUUIDAndSubType(Service.Lightbulb, channelString);
+                    var service = accessory.getServiceByUUIDAndSubType(Service.Switch, channelString);
                     if (service) {
                         service.updateCharacteristic(Characteristic.On, isOn);
                     }

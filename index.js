@@ -464,8 +464,7 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
         if (state == 'on') {
             isOn = true;
         }
-        accessory.getService(Service.Switch)
-            .updateCharacteristic(Characteristic.On, isOn);
+        accessory.getService(Service.Switch).updateCharacteristic(Characteristic.On, isOn);
     }
 
 };

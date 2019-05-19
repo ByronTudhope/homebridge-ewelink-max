@@ -149,6 +149,7 @@ function eWeLink(log, config, api) {
                             let accessory = platform.accessories.get(deviceId);
                             let deviceInformationFromWebApi = platform.devicesFromApi.get(deviceId);
                             let switchesAmount = platform.getDeviceChannelCount(deviceInformationFromWebApi);
+                            let dimmable = platform.getDeviceDimmable(deviceInformationFromWebApi);
 
                             accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.SerialNumber, deviceInformationFromWebApi.extra.extra.mac);
                             accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Manufacturer, deviceInformationFromWebApi.productModel);
@@ -163,7 +164,13 @@ function eWeLink(log, config, api) {
                             } else  {
                                 platform.log("Single channel device has been set: " + deviceInformationFromWebApi.extra.extra.model + ' uiid: ' + deviceInformationFromWebApi.uiid);
                                 platform.updatePowerStateCharacteristic(deviceId, deviceInformationFromWebApi.params.switch);
+                                if (dimmable) {
+                                    platform.log("Dimmable device");
+                                    platform.updateBrightnessCharacteristic(deviceId, deviceInformationFromWebApi.params.bright);
+                                }
                             }
+
+
 
                         } else {
                             let deviceToAdd = platform.devicesFromApi.get(deviceId);
@@ -215,6 +222,9 @@ function eWeLink(log, config, api) {
                                     platform.updatePowerStateCharacteristic(json.deviceid, json.params.switch);
                                 } else if (json.hasOwnProperty("params") && json.params.hasOwnProperty("switches") && Array.isArray(json.params.switches)) {
                                     platform.updatePowerStateCharacteristic(json.deviceid, json.params.switches);
+                                }
+                                if (json.hasOwnProperty("params") && json.params.hasOwnProperty("bright")) {
+                                    platform.updateBrightnessCharacteristic(json.deviceid, json.params.bright);
                                 }
 
                             }
@@ -295,7 +305,17 @@ eWeLink.prototype.configureAccessory = function(accessory) {
                 })
                 .on('get', function(callback) {
                     platform.getPowerState(accessory, 0, callback);
+                });
+
+        characteristic = service.getCharacteristic(Characteristic.Brightness);
+        if (characteristic) {
+            characteristic.on('set', function(value, callback) {
+                    platform.setBrightness(accessory, "0", value, callback);
+                })
+                .on('get', function(callback) {
+                    platform.getBrightness(accessory, "0", callback);
                 }); 
+        }
     }
 
     var service2 = accessory.getServiceByUUIDAndSubType(Service.Lightbulb, 'channel-1');
@@ -307,7 +327,7 @@ eWeLink.prototype.configureAccessory = function(accessory) {
                 })
                 .on('get', function(callback) {
                     platform.getPowerState(accessory, 1, callback);
-                }); 
+                });
     }
 
     this.accessories.set(accessory.context.deviceId, accessory);
@@ -345,10 +365,12 @@ eWeLink.prototype.addAccessory = function(device) {
     accessory.context.apiKey = device.apikey;
 
     let switchesAmount = platform.getDeviceChannelCount(device);
+    let dimmable = platform.getDeviceDimmable(device);
 
     accessory.reachable = device.online === 'true';
 
     if (switchesAmount == 1) {
+
         accessory.addService(Service.Lightbulb, device.name, 'channel-0')
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
@@ -357,6 +379,17 @@ eWeLink.prototype.addAccessory = function(device) {
             .on('get', function(callback) {
                 platform.getPowerState(accessory, "0", callback);
             });
+        
+        if (dimmable) {
+            accessory.getService(Service.Lightbulb, device.name, 'channel-0')
+                .addCharacteristic(Characteristic.Brightness)
+                .on('set', function(value, callback) {
+                    platform.setBrightness(accessory, "0", value, callback);
+                })
+                .on('get', function(callback) {
+                    platform.getBrightness(accessory, "0", callback);
+                }); 
+        }
     } else if (switchesAmount == 2) {
         accessory.addService(Service.Lightbulb, device.name + " CH1", 'channel-0')
             .getCharacteristic(Characteristic.On)
@@ -632,6 +665,167 @@ eWeLink.prototype.setPowerState = function(accessory, channel, isOn, callback) {
 };
 
 
+
+eWeLink.prototype.updateBrightnessCharacteristic = function(deviceId, brightness) {
+
+    // Used when we receive an update from an external source
+    let platform = this;
+
+    let accessory = platform.accessories.get(deviceId);
+    let device = platform.devicesFromApi.get(deviceId);
+    let switchesAmount = platform.getDeviceChannelCount(device);
+
+    if (!accessory) {
+        platform.log("Error updating non-exist accessory with deviceId [%s].", deviceId);
+        return;
+    }
+
+    platform.log("Updating recorded Characteristic.Brightness for [%s], to. [%s]", accessory.displayName, brightness);
+
+    if (switchesAmount == 1) {
+        if (accessory.getService(Service.Lightbulb)) {
+            accessory.getService(Service.Lightbulb).updateCharacteristic(Characteristic.Brightness, brightness);
+        }
+    } else {
+        //only single state dimmers supported
+    }
+
+};
+
+eWeLink.prototype.getBrightness = function(accessory, channel, callback) {
+    let platform = this;
+
+    if (!this.webClient) {
+        callback('this.webClient not yet ready while obtaining power status for your device');
+        accessory.reachable = false;
+        return;
+    }
+
+    platform.log("Requesting brightness for [%s] on channel [%s]", accessory.displayName, channel);
+
+    this.webClient.get('/api/user/device', function(err, res, body) {
+
+        if (err){
+            platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Error was [%s]", err);
+            return;
+        } else if (!body || body.hasOwnProperty('error')) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Response was [%s]", JSON.stringify(body));
+            if (body.hasOwnProperty('error') && [401, 402].indexOf(parseInt(body.error)) !== -1) {
+                platform.relogin();
+            }
+            callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
+            return;
+        }
+
+        let size = Object.keys(body).length;
+
+        if (body.length < 1) {
+            callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
+            accessory.reachable = false;
+            return;
+        }
+
+        let deviceId = accessory.context.deviceId;
+        let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
+
+        let filteredResponse = body.filter(device => (device.deviceid === deviceId));
+
+        if (filteredResponse.length === 1) {
+
+            let device = filteredResponse[0];
+
+            if (device.deviceid === deviceId) {
+
+                if (device.online !== true) {
+                    accessory.reachable = false;
+                    platform.log("Device [%s] was reported to be offline by the API", accessory.displayName);
+                    callback('API reported that [%s] is not online', device.name);
+                    return;
+                }
+
+                if(switchesAmount == 1) {
+                    if (device.params.bright) {
+                        accessory.reachable = true;
+                        platform.log('API reported that [%s] is at brightness [%s]', device.name, device.params.bright);
+                        callback(null, device.params.bright);
+                        return;
+                    } else {
+                        accessory.reachable = false;
+                        platform.log('API reported an unknown status for device [%s]', accessory.displayName);
+                        callback('API returned an unknown status for device ' + accessory.displayName);
+                        return;
+                    }
+                } else {
+                    //only single channel dimmers
+                    callback('only single channel dimmers');
+                }
+
+            }
+
+        } else if (filteredResponse.length > 1) {
+            // More than one device matches our Device ID. This should not happen.
+            platform.log("ERROR: The response contained more than one device with Device ID [%s]. Filtered response follows.", device.deviceid);
+            platform.log(filteredResponse);
+            callback("The response contained more than one device with Device ID " + device.deviceid);
+
+        } else if (filteredResponse.length < 1) {
+
+            // The device is no longer registered
+
+            platform.log("Device [%s] did not exist in the response. It will be removed", accessory.displayName);
+            platform.removeAccessory(accessory);
+
+        }
+
+    });
+
+
+};
+
+eWeLink.prototype.setBrightness = function(accessory, channel, brightness, callback) {
+
+    let platform = this;
+    let options = {};
+    let deviceId = accessory.context.deviceId;
+    options.protocolVersion = 13;
+
+    platform.log("Setting brightness to [%s] for device [%s] for channel [%s]", brightness, accessory.displayName, channel);
+
+    let payload = {};
+    payload.action = 'update';
+    payload.userAgent = 'app';
+    payload.params = {};
+    let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
+
+    if (switchesAmount == 1) {
+        payload.params.bright = brightness;
+    } else {
+        //only single channel dimmers
+    }
+    payload.apikey = '' + accessory.context.apiKey;
+    payload.deviceid = '' + deviceId;
+
+    payload.sequence = platform.getSequence();
+
+    let string = JSON.stringify(payload);
+
+    if (platform.isSocketOpen) {
+
+        setTimeout(function() {
+            platform.wsc.send(string);
+
+            // TODO Here we need to wait for the response to the socket
+
+            callback();
+        }, 1);
+
+    } else {
+        callback('Socket was closed. It will reconnect automatically; please retry your command');
+    }
+
+};
+
+
 // Sample function to show how developer can remove accessory dynamically from outside event
 eWeLink.prototype.removeAccessory = function(accessory) {
 
@@ -859,11 +1053,25 @@ eWeLink.prototype.getDeviceChannelCountByType = function (deviceType) {
     return DEVICE_CHANNEL_LENGTH[deviceType] || 0;
 };
 
+eWeLink.prototype.getDeviceDimmableByType = function (deviceType) {
+    const DEVICE_DIMMABLE = {
+        SINGLE_CHANNEL_DIMMER_SWITCH: true
+    };
+    return DEVICE_DIMMABLE[deviceType] || false;
+};
+
 eWeLink.prototype.getDeviceChannelCount = function (device) {
     let deviceType = this.getDeviceTypeByUiid(device.uiid);
     this.log('BYRON LOGGING ', deviceType);
     let channels = this.getDeviceChannelCountByType(deviceType);
     return channels;
+};
+
+eWeLink.prototype.getDeviceDimmable = function (device) {
+    let deviceType = this.getDeviceTypeByUiid(device.uiid);
+    this.log('BYRON LOGGING ', deviceType);
+    let dimmable = this.getDeviceDimmableByType(deviceType);
+    return dimmable;
 };
 
 /* WEB SOCKET STUFF */

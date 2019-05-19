@@ -286,42 +286,29 @@ eWeLink.prototype.configureAccessory = function(accessory) {
 
     let platform = this;
 
-    let device = platform.devicesFromApi.get(accessory.context.deviceId);
-    let switchesAmount = platform.getDeviceChannelCount(device);
+    var service = accessory.getServiceByUUIDAndSubType(Service.Switch, 'channel-0');
 
-    if (switchesAmount == 1) {
-        if (accessory.getService(Service.Switch)) {
-            accessory.getService(Service.Switch)
-                .getCharacteristic(Characteristic.On)
+    if (service) {
+       service.getCharacteristic(Characteristic.On)
                 .on('set', function(value, callback) {
                     platform.setPowerState(accessory, 0, value, callback);
                 })
                 .on('get', function(callback) {
                     platform.getPowerState(accessory, 0, callback);
-                });
-        }
-    } else if (switchesAmount == 2) {
-        accessory.getServiceByUUIDAndSubType(Service.Switch, 'channel-0')
-                .getCharacteristic(Characteristic.On)
-                .on('set', function(value, callback) {
-                    platform.setPowerState(accessory, 0, value, callback);
-                })
-                .on('get', function(callback) {
-                    platform.getPowerState(accessory, 0, callback);
-                });
-        accessory.getServiceByUUIDAndSubType(Service.Switch, 'channel-1')
-                .getCharacteristic(Characteristic.On)
-                .on('set', function(value, callback) {
-                    platform.setPowerState(accessory, 0, value, callback);
-                })
-                .on('get', function(callback) {
-                    platform.getPowerState(accessory, 0, callback);
-                });
-    } else {
-        platform.log('NO MORE THAN 2 SWITCHES CURRENTLY SUPPORTED');
+                }); 
     }
 
+    var service2 = accessory.getServiceByUUIDAndSubType(Service.Switch, 'channel-1');
 
+    if (service2) {
+       service2.getCharacteristic(Characteristic.On)
+                .on('set', function(value, callback) {
+                    platform.setPowerState(accessory, 1, value, callback);
+                })
+                .on('get', function(callback) {
+                    platform.getPowerState(accessory, 1, callback);
+                }); 
+    }
 
     this.accessories.set(accessory.context.deviceId, accessory);
 

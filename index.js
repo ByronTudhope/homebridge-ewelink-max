@@ -54,6 +54,7 @@ function eWeLink(log, config, api) {
     this.accessories = new Map();
     this.authenticationToken = config['authenticationToken'];
     this.devicesFromApi = new Map();
+    this.sensorTimers = [];
 
     if (api) {
         // Save the API object as plugin needs to register new accessory via this object
@@ -170,8 +171,6 @@ function eWeLink(log, config, api) {
                                 }
                             }
 
-
-
                         } else {
                             let deviceToAdd = platform.devicesFromApi.get(deviceId);
                             platform.log('Device [%s], ID : [%s] will be added', deviceToAdd.name, deviceId);
@@ -225,6 +224,10 @@ function eWeLink(log, config, api) {
                                 }
                                 if (json.hasOwnProperty("params") && json.params.hasOwnProperty("bright")) {
                                     platform.updateBrightnessCharacteristic(json.deviceid, json.params.bright);
+                                }
+
+                                if (json.hasOwnProperty("params") && json.params.hasOwnProperty("cmd") && json.params.hasOwnProperty("rfTrig0") && json.params.cmd == "trigger") {
+                                    platform.updateSensorStateCharacteristic(json.deviceid, json.params.rfTrig0);
                                 }
 
                             }
@@ -330,7 +333,6 @@ eWeLink.prototype.configureAccessory = function(accessory) {
         }
     }
 
-
     var service_switch_2 = accessory.getServiceByUUIDAndSubType(Service.Switch, 'channel-1');
 
     if (service_switch_2) {
@@ -340,6 +342,15 @@ eWeLink.prototype.configureAccessory = function(accessory) {
                 })
                 .on('get', function(callback) {
                     platform.getPowerState(accessory, 1, callback);
+                });
+    }
+
+    var service_motion_sensor = accessory.getServiceByUUIDAndSubType(Service.MotionSensor, 'channel-0');
+
+    if (service_motion_sensor) {
+       service_motion_sensor.getCharacteristic(Characteristic.MotionDetected)
+                .on('get', function(callback) {
+                    platform.getSensorState(accessory, "0", callback);
                 });
     }
 
@@ -379,6 +390,11 @@ eWeLink.prototype.addAccessory = function(device) {
 
     let switchesAmount = platform.getDeviceChannelCount(device);
     let dimmable = platform.getDeviceDimmable(device);
+    let rgb = platform.getDeviceRgb(device);
+    let isBridge = platform.getDeviceIsBridge(device);
+
+    accessory.context.isBridge = isBridge;
+    accessory.context.channels = [];
 
     accessory.reachable = device.online === 'true';
 
@@ -410,6 +426,7 @@ eWeLink.prototype.addAccessory = function(device) {
                     platform.getPowerState(accessory, "0", callback);
                 });
         }
+        accessory.context.channels.push(0);
     } else if (switchesAmount == 2) {
         accessory.addService(Service.Switch, device.name + " CH1", 'channel-0')
             .getCharacteristic(Characteristic.On)
@@ -427,17 +444,33 @@ eWeLink.prototype.addAccessory = function(device) {
             .on('get', function(callback) {
                 platform.getPowerState(accessory, "1", callback);
             });
-    } else {
-        platform.log('BYRON LOGGING ', accessory);
-        for (var switchChannel = 0; switchChannel < switchesAmount; switchChannel++) {
+            accessory.context.channels.push([0, 1]);
+    } else if (switchesAmount > 2) {
+        /*for (var switchChannel = 0; switchChannel < switchesAmount; switchChannel++) {
             accessory.addService(Service.Switch, device.name + ' CH' + (switchChannel + 1), 'channel-' + switchChannel)
                 .getCharacteristic(Characteristic.On)
                 .on('set', function(value, callback) {
-                    platform.setPowerState(accessory, switchChannel, value, callback);
+                    platform.setPowerState(accessory, new String(switchChannel), value, callback);//channels not supported yet, reference error
                 })
                 .on('get', function(callback) {
-                    platform.getPowerState(accessory, switchChannel, callback);
+                    platform.getPowerState(accessory, new String(switchChannel), callback);//channels not supported yet, reference error
                 });
+            accessory.context.channels.push(new String(switchChannel));//channels not supported yet, reference error
+        }*/
+    } else if (isBridge) {
+        //Device is RF Bridge, add motiton sensors (switches not supported yet)
+        if (device.hasOwnProperty('params') && device.params.hasOwnProperty('rfList')) {
+            for (let i = 0; i < device.params.rfList.length ; i++) {
+                if (device.params.rfList[i].hasOwnProperty('rfChl')) {
+                    var sensorChannel = device.params.rfList[i].rfChl;
+                    accessory.addService(Service.MotionSensor, 'Motion Sensor CH' + sensorChannel, 'channel-' + sensorChannel)
+                        .getCharacteristic(Characteristic.MotionDetected)
+                        .on('get', function(callback) {
+                            platform.getSensorState(accessory, "0", callback);//Channels not supported yet!
+                        });    
+                }
+                accessory.context.channels.push(sensorChannel);
+            }
         }
     }
 
@@ -521,6 +554,35 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
 
 };
 
+eWeLink.prototype.updateSensorStateCharacteristic = function(deviceId, state) {
+
+    // Used when we receive an update from an external source
+    let platform = this;
+
+    var motion = ((state !== false) ? true : false);
+
+    let accessory = platform.accessories.get(deviceId);
+    let device = platform.devicesFromApi.get(deviceId);
+
+    if (!accessory) {
+        platform.log("Error updating non-exist accessory with deviceId [%s].", deviceId);
+        return;
+    }
+
+    platform.log("Updating recorded Characteristic.MotionDetected for [%s], to.", accessory.displayName, state);
+
+    if (accessory.getService(Service.MotionSensor)) {
+        accessory.getService(Service.MotionSensor).updateCharacteristic(Characteristic.MotionDetected, motion);
+    }
+
+    if (motion === true) {
+        clearTimeout(platform.sensorTimers[deviceId]);
+        platform.sensorTimers[deviceId] = setTimeout(function() {
+            platform.updateSensorStateCharacteristic(deviceId, false);
+        }, 60000);
+    }
+};
+
 
 eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
     let platform = this;
@@ -597,13 +659,12 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
                     }
 
                 } else {
-
-                    if (device.params.switch === 'on') {
+                    if (device.params.switch === 'on' || device.params.state === 'on') {
                         accessory.reachable = true;
                         platform.log('API reported that [%s] is On', device.name);
                         callback(null, 1);
                         return;
-                    } else if (device.params.switch === 'off') {
+                    } else if (device.params.switch === 'off' || device.params.state === 'off') {
                         accessory.reachable = true;
                         platform.log('API reported that [%s] is Off', device.name);
                         callback(null, 0);
@@ -633,10 +694,91 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
             platform.removeAccessory(accessory);
 
         }
-
     });
+};
 
 
+eWeLink.prototype.getSensorState = function(accessory, channel, callback) {
+
+    let platform = this;
+
+    if (!this.webClient) {
+        callback('this.webClient not yet ready while obtaining power status for your device');
+        accessory.reachable = false;
+        return;
+    }
+
+    platform.log("Requesting power state for [%s] on channel [%s]", accessory.displayName, channel);
+
+    this.webClient.get('/api/user/device', function(err, res, body) {
+
+        if (err){
+            platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Error was [%s]", err);
+            return;
+        } else if (!body || body.hasOwnProperty('error')) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Response was [%s]", JSON.stringify(body));
+            if (body.hasOwnProperty('error') && [401, 402].indexOf(parseInt(body.error)) !== -1) {
+                platform.relogin();
+            }
+            callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
+            return;
+        }
+
+        let size = Object.keys(body).length;
+
+        if (body.length < 1) {
+            callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
+            accessory.reachable = false;
+            return;
+        }
+
+        let deviceId = accessory.context.deviceId;
+        let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
+
+        let filteredResponse = body.filter(device => (device.deviceid === deviceId));
+
+        if (filteredResponse.length === 1) {
+
+            let device = filteredResponse[0];
+
+            if (device.deviceid === deviceId) {
+
+                if (device.online !== true) {
+                    accessory.reachable = false;
+                    platform.log("Device [%s] was reported to be offline by the API", accessory.displayName);
+                    callback('API reported that [%s] is not online', device.name);
+                    return;
+                }
+
+                if (device.hasOwnProperty("params") && device.params.hasOwnProperty("cmd") && device.params.hasOwnProperty("rfTrig0") && device.params.cmd == "trigger") {
+                    var triggeredTime = new Date(device.params.rfTrig0);
+                    var nowTime = new Date();
+                    var seconds = (nowTime.getTime() - triggeredTime.getTime()) / 1000;
+                    if (seconds < 60) {
+                        callback(null, true);
+                    } else {
+                        callback(null, false);
+                    }
+                } else {
+                    callback(null, false);
+                }
+            }
+
+        } else if (filteredResponse.length > 1) {
+            // More than one device matches our Device ID. This should not happen.
+            platform.log("ERROR: The response contained more than one device with Device ID [%s]. Filtered response follows.", device.deviceid);
+            platform.log(filteredResponse);
+            callback("The response contained more than one device with Device ID " + device.deviceid);
+
+        } else if (filteredResponse.length < 1) {
+
+            // The device is no longer registered
+
+            platform.log("Device [%s] did not exist in the response. It will be removed", accessory.displayName);
+            platform.removeAccessory(accessory);
+
+        }
+    });
 };
 
 eWeLink.prototype.setPowerState = function(accessory, channel, isOn, callback) {
@@ -668,6 +810,7 @@ eWeLink.prototype.setPowerState = function(accessory, channel, isOn, callback) {
         payload.params.switches[channel].switch = targetState;
     } else {
         payload.params.switch = targetState;
+        payload.params.state = targetState;
     }
     payload.apikey = '' + accessory.context.apiKey;
     payload.deviceid = '' + deviceId;
@@ -1076,7 +1219,8 @@ eWeLink.prototype.getDeviceChannelCountByType = function (deviceType) {
         GSM_SOCKET_4: 4,
         SWITCH_4: 4,
         CUN_YOU_DOOR: 4,
-        SINGLE_CHANNEL_DIMMER_SWITCH: 1
+        SINGLE_CHANNEL_DIMMER_SWITCH: 1,
+        RGB_BALL_LIGHT: 1
     };
     return DEVICE_CHANNEL_LENGTH[deviceType] || 0;
 };
@@ -1088,18 +1232,42 @@ eWeLink.prototype.getDeviceDimmableByType = function (deviceType) {
     return DEVICE_DIMMABLE[deviceType] || false;
 };
 
+eWeLink.prototype.getDeviceRgbByType = function (deviceType) {
+    const DEVICE_RGB = {
+        RGB_BALL_LIGHT: true
+    };
+    return DEVICE_RGB[deviceType] || false;
+};
+
+eWeLink.prototype.getDeviceIsBridgeByType = function (deviceType) {
+    const DEVICE_BRIDGE = {
+        RF_BRIDGE: true
+    };
+    return DEVICE_BRIDGE[deviceType] || false;
+};
+
 eWeLink.prototype.getDeviceChannelCount = function (device) {
     let deviceType = this.getDeviceTypeByUiid(device.uiid);
-    this.log('BYRON LOGGING ', deviceType);
     let channels = this.getDeviceChannelCountByType(deviceType);
     return channels;
 };
 
 eWeLink.prototype.getDeviceDimmable = function (device) {
     let deviceType = this.getDeviceTypeByUiid(device.uiid);
-    this.log('BYRON LOGGING ', deviceType);
     let dimmable = this.getDeviceDimmableByType(deviceType);
     return dimmable;
+};
+
+eWeLink.prototype.getDeviceRgb = function (device) {
+    let deviceType = this.getDeviceTypeByUiid(device.uiid);
+    let rgb = this.getDeviceRgbByType(deviceType);
+    return rgb;
+};
+
+eWeLink.prototype.getDeviceIsBridge = function (device) {
+    let deviceType = this.getDeviceTypeByUiid(device.uiid);
+    let bridge = this.getDeviceIsBridgeByType(deviceType);
+    return bridge;
 };
 
 /* WEB SOCKET STUFF */

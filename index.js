@@ -732,7 +732,7 @@ eWeLink.prototype.getPowerState = function (accessory, channel, callback) {
         }*/
 
         let filteredResponse = body.filter(device => (device.deviceid === deviceId));
-        platform.log(deviceId);
+        platform.log("Response received for power state: " + deviceId);
 
         if (filteredResponse.length === 1) {
 
@@ -860,7 +860,7 @@ eWeLink.prototype.getBrightnessState = function(accessory, channel, callback) {
         }*/
 
         let filteredResponse = body.filter(device => (device.deviceid === deviceId));
-        platform.log(deviceId);
+        platform.log("Response received for brightness state: " + deviceId);
         let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
 
         if (filteredResponse.length === 1) {
@@ -968,7 +968,7 @@ eWeLink.prototype.getSensorState = function(accessory, channel, callback) {
         }*/
 
         let filteredResponse = body.filter(device => (device.deviceid === deviceId));
-        platform.log(deviceId);
+        platform.log("Response received for sensor state: " + deviceId);
         let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
 
         if (filteredResponse.length === 1) {

@@ -697,6 +697,7 @@ eWeLink.prototype.getPowerState = function (accessory, channel, callback) {
                 // callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
                 platform.log('Sonoff API 503 error');
                 setTimeout(function() {
+                    platform.log('Retrying Power State: ' + accessory + ' ' + channel);
                     platform.getPowerState(accessory, channel, callback);
                 }, 1000);
             } else {
@@ -734,6 +735,8 @@ eWeLink.prototype.getPowerState = function (accessory, channel, callback) {
         let filteredResponse = body.filter(device => (device.deviceid === deviceId));
         platform.log("Response received for power state: " + deviceId);
 
+        let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
+        
         if (filteredResponse.length === 1) {
 
             let device = filteredResponse[0];
@@ -747,7 +750,7 @@ eWeLink.prototype.getPowerState = function (accessory, channel, callback) {
                     return;
                 }
 
-                if (accessory.context.switches == 1) {
+                if (switchesAmount == 1) {
                     if (device.params.switch === 'on') {
                         accessory.reachable = true;
                         platform.log('API reported that [%s] is On', device.name);
@@ -766,7 +769,7 @@ eWeLink.prototype.getPowerState = function (accessory, channel, callback) {
                     }
                 }
 
-                if (accessory.context.switches > 1) {
+                if (switchesAmount > 1) {
                     if (device.params.switches[channel].switch === 'on') {
                         accessory.reachable = true;
                         platform.log('API reported that [%s] CH %s is On', device.name, accessory.context.channel);
@@ -799,7 +802,7 @@ eWeLink.prototype.getPowerState = function (accessory, channel, callback) {
             // The device is no longer registered
 
             platform.log("Device [%s] did not exist in the response.", accessory.displayName);
-            //platform.removeAccessory(accessory);
+            platform.removeAccessory(accessory);
 
         }
 

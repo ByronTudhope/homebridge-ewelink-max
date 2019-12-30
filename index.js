@@ -2,8 +2,10 @@
 let WebSocket = require('ws');
 let http = require('http');
 let url = require('url');
+const querystring = require('querystring');
 let request = require('request-json');
 let nonce = require('nonce')();
+let crypto = require('crypto');
 
 let wsc;
 let isSocketOpen = false;
@@ -13,7 +15,7 @@ let apiKey = 'UNCONFIGURED';
 let authenticationToken = 'UNCONFIGURED';
 let Accessory, Service, Characteristic, UUIDGen;
 
-module.exports = function(homebridge) {
+module.exports = function (homebridge) {
     console.log("homebridge API version: " + homebridge.version);
 
     // Accessory must be created from PlatformAccessory Constructor
@@ -33,28 +35,40 @@ module.exports = function(homebridge) {
 // Platform constructor
 function eWeLink(log, config, api) {
 
-    if(!config || (!config['authenticationToken'] && ((!config['phoneNumber'] && !config['email']) || !config['password'] || !config['imei']))){
-        log("Initialization skipped. Missing configuration data.");
-        return;
-    }
-
-    if (!config['apiHost']) {
-        config['apiHost'] = 'us-api.coolkit.cc:8080';
-    }
-    if (!config['webSocketApi']) {
-        config['webSocketApi'] = 'us-pconnect3.coolkit.cc';
-    }
-
-    log("Intialising eWeLink");
-
     let platform = this;
-
     this.log = log;
     this.config = config;
     this.accessories = new Map();
     this.authenticationToken = config['authenticationToken'];
     this.devicesFromApi = new Map();
     this.sensorTimers = [];
+
+    if (!config || (!config['authenticationToken'] && ((!config['phoneNumber'] && !config['email']) || !config['password'] || !config['imei']))) {
+        log("Initialization skipped. Missing configuration data.");
+        return;
+    }
+
+    if (!config['apiHost']) {
+        config['apiHost'] = 'eu-api.coolkit.cc:8080';
+    }
+    if (!config['webSocketApi']) {
+        config['webSocketApi'] = 'us-pconnect3.coolkit.cc';
+    }
+
+    platform.log("Intialising eWeLink");
+
+    // Groups configuration
+    this.groups = new Map();
+    let configGroups = config['groups'] || null;
+    if (configGroups) {
+        if (Object.keys(configGroups).length > 0) {
+            this.config.groups.forEach((group) => {
+                this.groups.set(group.deviceId, group);
+            });
+        }
+    }
+
+    platform.log("Found %s group(s)", this.groups.size);
 
     if (api) {
         // Save the API object as plugin needs to register new accessory via this object
@@ -65,12 +79,12 @@ function eWeLink(log, config, api) {
         // Or start discover new accessories.
 
 
-        this.api.on('didFinishLaunching', function() {
+        this.api.on('didFinishLaunching', function () {
 
             platform.log("A total of [%s] accessories were loaded from the local cache", platform.accessories.size);
-            
-            this.login(function () {
-                
+
+            let afterLogin = function () {
+
                 // Get a list of all devices from the API, and compare it to the list of cached devices.
                 // New devices will be added, and devices that exist in the cache but not in the web list
                 // will be removed from Homebridge.
@@ -82,29 +96,30 @@ function eWeLink(log, config, api) {
                 this.webClient = request.createClient(url);
 
                 this.webClient.headers['Authorization'] = 'Bearer ' + this.authenticationToken;
-                this.webClient.get('/api/user/device', function(err, res, body) {
+                this.webClient.get('/api/user/device?' + this.getArguments(), function (err, res, body) {
 
-                    if (err){
+                    if (err) {
                         platform.log("An error was encountered while requesting a list of devices. Error was [%s]", err);
                         return;
-                    } else if (!body || body.hasOwnProperty('error')) {
-
+                    } else if (!body) {
+                        platform.log("An error was encountered while requesting a list of devices. No data in response.");
+                        return;
+                    } else if (body.hasOwnProperty('error') && body.error != 0) {
                         let response = JSON.stringify(body);
-
                         platform.log("An error was encountered while requesting a list of devices. Response was [%s]", response);
-
-                        if (body && body.error === '401') {
+                        if (body.error === '401') {
                             platform.log("Verify that you have the correct authenticationToken specified in your configuration. The currently-configured token is [%s]", platform.authenticationToken);
                         }
-
                         return;
                     }
+
+                    body = body.devicelist;
 
                     let size = Object.keys(body).length;
                     platform.log("eWeLink HTTPS API reports that there are a total of [%s] devices registered", size);
 
                     if (size === 0) {
-                        platform.log("As there were no devices were found, all devices have been removed from the platorm's cache. Please regiester your devices using the eWeLink app and restart HomeBridge");
+                        platform.log("As there were no devices were found, all devices have been removed from the platform's cache. Please regiester your devices using the eWeLink app and restart HomeBridge");
                         platform.accessories.clear();
                         platform.api.unregisterPlatformAccessories("homebridge-eWeLink", "eWeLink", platform.accessories);
                         return;
@@ -195,7 +210,7 @@ function eWeLink(log, config, api) {
 
                     platform.wsc.open(url);
 
-                    platform.wsc.onmessage = function(message) {
+                    platform.wsc.onmessage = function (message) {
 
                         // Heartbeat response can be safely ignored
                         if (message == 'pong') {
@@ -242,7 +257,7 @@ function eWeLink(log, config, api) {
 
                     };
 
-                    platform.wsc.onopen = function(e) {
+                    platform.wsc.onopen = function (e) {
 
                         platform.isSocketOpen = true;
 
@@ -274,7 +289,7 @@ function eWeLink(log, config, api) {
 
                     };
 
-                    platform.wsc.onclose = function(e) {
+                    platform.wsc.onclose = function (e) {
                         platform.log("WebSocket was closed. Reason [%s]", e);
                         platform.isSocketOpen = false;
                         if (platform.hbInterval) {
@@ -285,7 +300,16 @@ function eWeLink(log, config, api) {
 
                 }); // End WebSocket
 
-            }.bind(this)); // End login
+            }; // End afterLogin
+
+            // Resolve region if countryCode is provided
+            if (this.config['countryCode']) {
+                this.getRegion(this.config['countryCode'], function () {
+                    this.login(afterLogin.bind(this));
+                }.bind(this));
+            } else {
+                this.login(afterLogin.bind(this));
+            }
 
         }.bind(this));
     }
@@ -295,9 +319,9 @@ function eWeLink(log, config, api) {
 // We update the existing devices as part of didFinishLaunching(), as to avoid an additional call to the the HTTPS API.
 eWeLink.prototype.configureAccessory = function(accessory) {
 
-    this.log(accessory.displayName, "Configure Accessory");
-
     let platform = this;
+
+    platform.log(accessory.displayName, "Configure Accessory");
 
     var service_switch_1 = accessory.getServiceByUUIDAndSubType(Service.Switch, 'channel-0');
 
@@ -328,7 +352,7 @@ eWeLink.prototype.configureAccessory = function(accessory) {
                     platform.setBrightness(accessory, "0", value, callback);
                 })
                 .on('get', function(callback) {
-                    platform.getBrightness(accessory, "0", callback);
+                    platform.getBrightnessState(accessory, "0", callback);
                 }); 
         }
     }
@@ -414,7 +438,7 @@ eWeLink.prototype.addAccessory = function(device) {
                     platform.setBrightness(accessory, "0", value, callback);
                 })
                 .on('get', function(callback) {
-                    platform.getBrightness(accessory, "0", callback);
+                    platform.getBrightnessState(accessory, "0", callback);
                 }); 
         } else {
             accessory.addService(Service.Switch, device.name, 'channel-0')
@@ -436,6 +460,7 @@ eWeLink.prototype.addAccessory = function(device) {
             .on('get', function(callback) {
                 platform.getPowerState(accessory, "0", callback);
             });
+
         accessory.addService(Service.Switch, device.name + " CH2", 'channel-1')
             .getCharacteristic(Characteristic.On)
             .on('set', function(value, callback) {
@@ -497,6 +522,7 @@ eWeLink.prototype.getSequence = function() {
     return this.sequence;
 };
 
+// Update characteristics when updated from an externral source
 eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
 
     // Used when we receive an update from an external source
@@ -548,8 +574,34 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
                 }
             }
         });
+    }
+    
+    //only up to two channel switches supported
+
+};
+
+eWeLink.prototype.updateBrightnessCharacteristic = function(deviceId, brightness) {
+
+    // Used when we receive an update from an external source
+    let platform = this;
+
+    let accessory = platform.accessories.get(deviceId);
+    let device = platform.devicesFromApi.get(deviceId);
+    let switchesAmount = platform.getDeviceChannelCount(device);
+
+    if (!accessory) {
+        platform.log("Error updating non-exist accessory with deviceId [%s].", deviceId);
+        return;
+    }
+
+    platform.log("Updating recorded Characteristic.Brightness for [%s], to. [%s]", accessory.displayName, brightness);
+
+    if (switchesAmount == 1) {
+        if (accessory.getService(Service.Lightbulb)) {
+            accessory.getService(Service.Lightbulb).updateCharacteristic(Characteristic.Brightness, brightness);
+        }
     } else {
-        //only up to two channel switches supported
+        //only single state dimmers supported
     }
 
 };
@@ -583,8 +635,51 @@ eWeLink.prototype.updateSensorStateCharacteristic = function(deviceId, state) {
     }
 };
 
+/*eWeLink.prototype.updateCurrentTemperatureCharacteristic = function (deviceId, state, device = null, channel = null) {
 
-eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
+    // Used when we receive an update from an external source
+
+    let platform = this;
+
+    let accessory = platform.accessories.get(deviceId);
+    //platform.log("deviceID:", deviceId);
+
+    if (typeof accessory === 'undefined' && device) {
+        platform.addAccessory(device, deviceId);
+        accessory = platform.accessories.get(deviceId);
+    }
+
+    if (!accessory) {
+        platform.log("Error updating non-exist accessory with deviceId [%s].", deviceId);
+        return;
+    }
+
+    // platform.log(JSON.stringify(device,null,2));
+
+    let currentTemperature = state.currentTemperature;
+    let currentHumidity = state.currentHumidity;
+
+    platform.log("Updating recorded Characteristic.CurrentTemperature for [%s] to [%s]. No request will be sent to the device.", accessory.displayName, currentTemperature);
+    platform.log("Updating recorded Characteristic.CurrentRelativeHuniditgy for [%s] to [%s]. No request will be sent to the device.", accessory.displayName, currentHumidity);
+
+    if (accessory.getService(Service.Thermostat)) {
+        accessory.getService(Service.Thermostat)
+            .setCharacteristic(Characteristic.CurrentTemperature, currentTemperature);
+        accessory.getService(Service.Thermostat)
+            .setCharacteristic(Characteristic.CurrentRelativeHumidity, currentHumidity);
+    }
+    if (accessory.getService(Service.TemperatureSensor)) {
+        accessory.getService(Service.TemperatureSensor)
+            .setCharacteristic(Characteristic.CurrentTemperature, currentTemperature);
+    }
+    if (accessory.getService(Service.HumiditySensor)) {
+        accessory.getService(Service.HumiditySensor)
+            .setCharacteristic(Characteristic.CurrentRelativeHumidity, currentHumidity);
+    }
+};*/
+
+// Get the current states via API
+eWeLink.prototype.getPowerState = function (accessory, channel, callback) {
     let platform = this;
 
     if (!this.webClient) {
@@ -595,19 +690,33 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
 
     platform.log("Requesting power state for [%s] on channel [%s]", accessory.displayName, channel);
 
-    this.webClient.get('/api/user/device', function(err, res, body) {
+    this.webClient.get('/api/user/device?' + this.getArguments(), function (err, res, body) {
 
-        if (err){
-            platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Error was [%s]", err);
+        if (err) {
+            if ([503].indexOf(parseInt(res.statusCode)) !== -1) {
+                // callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
+                platform.log('Sonoff API 503 error');
+                setTimeout(function() {
+                    platform.log('Retrying Power State: ' + accessory + ' ' + channel);
+                    platform.getPowerState(accessory, channel, callback);
+                }, 1000);
+            } else {
+                platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Error was [%s]", err);
+            }
             return;
-        } else if (!body || body.hasOwnProperty('error')) {
-            platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Response was [%s]", JSON.stringify(body));
-            if (body.hasOwnProperty('error') && [401, 402].indexOf(parseInt(body.error)) !== -1) {
+        } else if (!body) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating power status. No data in response.", err);
+            return;
+        } else if (body.hasOwnProperty('error') && body.error != 0) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Response was [%s]", null); JSON.stringify(body)
+            if ([401, 402].indexOf(parseInt(body.error)) !== -1) {
                 platform.relogin();
             }
             callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
             return;
         }
+
+        body = body.devicelist;
 
         let size = Object.keys(body).length;
 
@@ -618,10 +727,16 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
         }
 
         let deviceId = accessory.context.deviceId;
-        let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
+
+        /*if (accessory.context.switches > 1) {
+            deviceId = deviceId.replace("CH" + accessory.context.channel, "");
+        }*/
 
         let filteredResponse = body.filter(device => (device.deviceid === deviceId));
+        platform.log("Response received for power state: " + deviceId);
 
+        let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
+        
         if (filteredResponse.length === 1) {
 
             let device = filteredResponse[0];
@@ -635,20 +750,15 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
                     return;
                 }
 
-                if(switchesAmount < 1) {
-
-                } else if(switchesAmount > 1) {
-
-                    if (device.params.switches[channel].switch === 'on') {
+                if (switchesAmount == 1) {
+                    if (device.params.switch === 'on') {
                         accessory.reachable = true;
-                        let channelString = parseInt(channel, 10) + 1;
-                        platform.log('API reported that [%s CH%s] is On', device.name, channelString);
+                        platform.log('API reported that [%s] is On', device.name);
                         callback(null, 1);
                         return;
-                    } else if (device.params.switches[channel].switch === 'off') {
+                    } else if (device.params.switch === 'off') {
                         accessory.reachable = true;
-                        let channelString = parseInt(channel, 10) + 1;
-                        platform.log('API reported that [%s CH%s] is Off', device.name, channelString);
+                        platform.log('API reported that [%s] is Off', device.name);
                         callback(null, 0);
                         return;
                     } else {
@@ -657,16 +767,17 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
                         callback('API returned an unknown status for device ' + accessory.displayName);
                         return;
                     }
+                }
 
-                } else {
-                    if (device.params.switch === 'on' || device.params.state === 'on') {
+                if (switchesAmount > 1) {
+                    if (device.params.switches[channel].switch === 'on') {
                         accessory.reachable = true;
-                        platform.log('API reported that [%s] is On', device.name);
+                        platform.log('API reported that [%s] CH %s is On', device.name, accessory.context.channel);
                         callback(null, 1);
                         return;
-                    } else if (device.params.switch === 'off' || device.params.state === 'off') {
+                    } else if (device.params.switches[channel].switch === 'off') {
                         accessory.reachable = true;
-                        platform.log('API reported that [%s] is Off', device.name);
+                        platform.log('API reported that [%s] CH %s is Off', device.name, accessory.context.channel);
                         callback(null, 0);
                         return;
                     } else {
@@ -690,13 +801,121 @@ eWeLink.prototype.getPowerState = function(accessory, channel, callback) {
 
             // The device is no longer registered
 
+            platform.log("Device [%s] did not exist in the response.", accessory.displayName);
+            platform.removeAccessory(accessory);
+
+        }
+
+    });
+
+};
+
+eWeLink.prototype.getBrightnessState = function(accessory, channel, callback) {
+    let platform = this;
+
+    if (!this.webClient) {
+        callback('this.webClient not yet ready while obtaining power status for your device');
+        accessory.reachable = false;
+        return;
+    }
+
+    platform.log("Requesting power state for [%s] on channel [%s]", accessory.displayName, channel);
+
+    this.webClient.get('/api/user/device?' + this.getArguments(), function (err, res, body) {
+
+        if (err) {
+            if ([503].indexOf(parseInt(res.statusCode)) !== -1) {
+                // callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
+                platform.log('Sonoff API 503 error');
+                setTimeout(function() {
+                    platform.getPowerState(accessory, channel, callback);
+                }, 1000);
+            } else {
+                platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Error was [%s]", err);
+            }
+            return;
+        } else if (!body) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating power status. No data in response.", err);
+            return;
+        } else if (body.hasOwnProperty('error') && body.error != 0) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Response was [%s]", null); JSON.stringify(body)
+            if ([401, 402].indexOf(parseInt(body.error)) !== -1) {
+                platform.relogin();
+            }
+            callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
+            return;
+        }
+
+        body = body.devicelist;
+
+        let size = Object.keys(body).length;
+
+        if (body.length < 1) {
+            callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
+            accessory.reachable = false;
+            return;
+        }
+
+        let deviceId = accessory.context.deviceId;
+
+        /*if (accessory.context.switches > 1) {
+            deviceId = deviceId.replace("CH" + accessory.context.channel, "");
+        }*/
+
+        let filteredResponse = body.filter(device => (device.deviceid === deviceId));
+        platform.log("Response received for brightness state: " + deviceId);
+        let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
+
+        if (filteredResponse.length === 1) {
+
+            let device = filteredResponse[0];
+
+            if (device.deviceid === deviceId) {
+
+                if (device.online !== true) {
+                    accessory.reachable = false;
+                    platform.log("Device [%s] was reported to be offline by the API", accessory.displayName);
+                    callback('API reported that [%s] is not online', device.name);
+                    return;
+                }
+
+                if(switchesAmount == 1) {
+                    if (device.params.bright) {
+                        accessory.reachable = true;
+                        platform.log('API reported that [%s] is at brightness [%s]', device.name, device.params.bright);
+                        callback(null, device.params.bright);
+                        return;
+                    } else {
+                        accessory.reachable = false;
+                        platform.log('API reported an unknown status for device [%s]', accessory.displayName);
+                        callback('API returned an unknown status for device ' + accessory.displayName);
+                        return;
+                    }
+                } else {
+                    //only single channel dimmers
+                    callback('only single channel dimmers');
+                }
+
+            }
+
+        } else if (filteredResponse.length > 1) {
+            // More than one device matches our Device ID. This should not happen.
+            platform.log("ERROR: The response contained more than one device with Device ID [%s]. Filtered response follows.", device.deviceid);
+            platform.log(filteredResponse);
+            callback("The response contained more than one device with Device ID " + device.deviceid);
+
+        } else if (filteredResponse.length < 1) {
+
+            // The device is no longer registered
+
             platform.log("Device [%s] did not exist in the response. It will be removed", accessory.displayName);
             platform.removeAccessory(accessory);
 
         }
-    });
-};
 
+    });
+
+};
 
 eWeLink.prototype.getSensorState = function(accessory, channel, callback) {
 
@@ -710,19 +929,32 @@ eWeLink.prototype.getSensorState = function(accessory, channel, callback) {
 
     platform.log("Requesting power state for [%s] on channel [%s]", accessory.displayName, channel);
 
-    this.webClient.get('/api/user/device', function(err, res, body) {
+    this.webClient.get('/api/user/device?' + this.getArguments(), function (err, res, body) {
 
-        if (err){
-            platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Error was [%s]", err);
+        if (err) {
+            if ([503].indexOf(parseInt(res.statusCode)) !== -1) {
+                // callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
+                platform.log('Sonoff API 503 error');
+                setTimeout(function() {
+                    platform.getPowerState(accessory, channel, callback);
+                }, 1000);
+            } else {
+                platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Error was [%s]", err);
+            }
             return;
-        } else if (!body || body.hasOwnProperty('error')) {
-            platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Response was [%s]", JSON.stringify(body));
-            if (body.hasOwnProperty('error') && [401, 402].indexOf(parseInt(body.error)) !== -1) {
+        } else if (!body) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating power status. No data in response.", err);
+            return;
+        } else if (body.hasOwnProperty('error') && body.error != 0) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Response was [%s]", null); JSON.stringify(body)
+            if ([401, 402].indexOf(parseInt(body.error)) !== -1) {
                 platform.relogin();
             }
             callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
             return;
         }
+
+        body = body.devicelist;
 
         let size = Object.keys(body).length;
 
@@ -733,9 +965,14 @@ eWeLink.prototype.getSensorState = function(accessory, channel, callback) {
         }
 
         let deviceId = accessory.context.deviceId;
-        let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
+
+        /*if (accessory.context.switches > 1) {
+            deviceId = deviceId.replace("CH" + accessory.context.channel, "");
+        }*/
 
         let filteredResponse = body.filter(device => (device.deviceid === deviceId));
+        platform.log("Response received for sensor state: " + deviceId);
+        let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
 
         if (filteredResponse.length === 1) {
 
@@ -780,7 +1017,166 @@ eWeLink.prototype.getSensorState = function(accessory, channel, callback) {
         }
     });
 };
+/*eWeLink.prototype.getCurrentTemperature = function (accessory, callback) {
+    let platform = this;
 
+    platform.log("Requesting current temperature for [%s]", accessory.displayName);
+
+    this.webClient.get('/api/user/device?' + this.getArguments(), function (err, res, body) {
+
+        if (err) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating current temperature. Verify your configuration options. Error was [%s]", err);
+            return;
+        } else if (!body) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating current temperature. Verify your configuration options. No data in response.", err);
+            return;
+        } else if (body.hasOwnProperty('error') && body.error != 0) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating current temperature. Verify your configuration options. Response was [%s]", JSON.stringify(body));
+            callback('An error was encountered while requesting a list of devices to interrogate current temperature for your device');
+            return;
+        }
+
+        body = body.devicelist;
+
+        let size = Object.keys(body).length;
+
+        if (body.length < 1) {
+            callback('An error was encountered while requesting a list of devices to interrogate current temperature for your device');
+            accessory.reachable = false;
+            return;
+        }
+
+        let deviceId = accessory.context.deviceId;
+
+        let filteredResponse = body.filter(device => (device.deviceid === deviceId));
+
+        if (filteredResponse.length === 1) {
+
+            let device = filteredResponse[0];
+
+            if (device.deviceid === deviceId) {
+
+                if (device.online !== true) {
+                    accessory.reachable = false;
+                    platform.log("Device [%s] was reported to be offline by the API", accessory.displayName);
+                    callback('API reported that [%s] is not online', device.name);
+                    return;
+                }
+
+                let currentTemperature = device.params.currentTemperature;
+                platform.log("getCurrentTemperature:", currentTemperature);
+
+                if (accessory.getService(Service.Thermostat)) {
+                    accessory.getService(Service.Thermostat).setCharacteristic(Characteristic.CurrentTemperature, currentTemperature);
+                }
+                if (accessory.getService(Service.TemperatureSensor)) {
+                    accessory.getService(Service.TemperatureSensor).setCharacteristic(Characteristic.CurrentTemperature, currentTemperature);
+                }
+                accessory.reachable = true;
+                callback(null, currentTemperature);
+
+            }
+
+        } else if (filteredResponse.length > 1) {
+            // More than one device matches our Device ID. This should not happen.
+            platform.log("ERROR: The response contained more than one device with Device ID [%s]. Filtered response follows.", device.deviceid);
+            platform.log(filteredResponse);
+            callback("The response contained more than one device with Device ID " + device.deviceid);
+
+        } else if (filteredResponse.length < 1) {
+
+            // The device is no longer registered
+
+            platform.log("Device [%s] did not exist in the response. It will be removed", accessory.displayName);
+            platform.removeAccessory(accessory);
+
+        }
+
+    });
+
+};
+
+eWeLink.prototype.getCurrentHumidity = function (accessory, callback) {
+    let platform = this;
+
+    platform.log("Requesting current humidity for [%s]", accessory.displayName);
+
+    this.webClient.get('/api/user/device?' + this.getArguments(), function (err, res, body) {
+
+        if (err) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating current humidity. Verify your configuration options. Error was [%s]", err);
+            return;
+        } else if (!body) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating current humidity. Verify your configuration options. No data in response.", err);
+            return;
+        } else if (body.hasOwnProperty('error') && body.error != 0) {
+            platform.log("An error was encountered while requesting a list of devices while interrogating current humidity. Verify your configuration options. Response was [%s]", JSON.stringify(body));
+            callback('An error was encountered while requesting a list of devices to interrogate current humidity for your device');
+            return;
+        }
+
+        body = body.devicelist;
+
+        let size = Object.keys(body).length;
+
+        if (body.length < 1) {
+            callback('An error was encountered while requesting a list of devices to interrogate current humidity for your device');
+            accessory.reachable = false;
+            return;
+        }
+
+        let deviceId = accessory.context.deviceId;
+
+        let filteredResponse = body.filter(device => (device.deviceid === deviceId));
+
+        if (filteredResponse.length === 1) {
+
+            let device = filteredResponse[0];
+
+            if (device.deviceid === deviceId) {
+
+                if (device.online !== true) {
+                    accessory.reachable = false;
+                    platform.log("Device [%s] was reported to be offline by the API", accessory.displayName);
+                    callback('API reported that [%s] is not online', device.name);
+                    return;
+                }
+
+                let currentHumidity = device.params.currentHumidity;
+                platform.log("getCurrentHumidity:", currentHumidity);
+
+                if (accessory.getService(Service.Thermostat)) {
+                    accessory.getService(Service.Thermostat).setCharacteristic(Characteristic.CurrentRelativeHumidity, currentHumidity);
+                }
+                if (accessory.getService(Service.HumiditySensor)) {
+                    accessory.getService(Service.Thermostat).setCharacteristic(Characteristic.CurrentRelativeHumidity, currentHumidity);
+                }
+                accessory.reachable = true;
+                callback(null, currentHumidity);
+
+            }
+
+        } else if (filteredResponse.length > 1) {
+            // More than one device matches our Device ID. This should not happen.
+            platform.log("ERROR: The response contained more than one device with Device ID [%s]. Filtered response follows.", device.deviceid);
+            platform.log(filteredResponse);
+            callback("The response contained more than one device with Device ID " + device.deviceid);
+
+        } else if (filteredResponse.length < 1) {
+
+            // The device is no longer registered
+
+            platform.log("Device [%s] did not exist in the response. It will be removed", accessory.displayName);
+            platform.removeAccessory(accessory);
+
+        }
+
+    });
+
+};*/
+
+
+// Set the state via the home app
 eWeLink.prototype.setPowerState = function(accessory, channel, isOn, callback) {
 
     let platform = this;
@@ -835,124 +1231,6 @@ eWeLink.prototype.setPowerState = function(accessory, channel, isOn, callback) {
 
 };
 
-
-
-eWeLink.prototype.updateBrightnessCharacteristic = function(deviceId, brightness) {
-
-    // Used when we receive an update from an external source
-    let platform = this;
-
-    let accessory = platform.accessories.get(deviceId);
-    let device = platform.devicesFromApi.get(deviceId);
-    let switchesAmount = platform.getDeviceChannelCount(device);
-
-    if (!accessory) {
-        platform.log("Error updating non-exist accessory with deviceId [%s].", deviceId);
-        return;
-    }
-
-    platform.log("Updating recorded Characteristic.Brightness for [%s], to. [%s]", accessory.displayName, brightness);
-
-    if (switchesAmount == 1) {
-        if (accessory.getService(Service.Lightbulb)) {
-            accessory.getService(Service.Lightbulb).updateCharacteristic(Characteristic.Brightness, brightness);
-        }
-    } else {
-        //only single state dimmers supported
-    }
-
-};
-
-eWeLink.prototype.getBrightness = function(accessory, channel, callback) {
-    let platform = this;
-
-    if (!this.webClient) {
-        callback('this.webClient not yet ready while obtaining power status for your device');
-        accessory.reachable = false;
-        return;
-    }
-
-    platform.log("Requesting brightness for [%s] on channel [%s]", accessory.displayName, channel);
-
-    this.webClient.get('/api/user/device', function(err, res, body) {
-
-        if (err){
-            platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Error was [%s]", err);
-            return;
-        } else if (!body || body.hasOwnProperty('error')) {
-            platform.log("An error was encountered while requesting a list of devices while interrogating power status. Verify your configuration options. Response was [%s]", JSON.stringify(body));
-            if (body.hasOwnProperty('error') && [401, 402].indexOf(parseInt(body.error)) !== -1) {
-                platform.relogin();
-            }
-            callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
-            return;
-        }
-
-        let size = Object.keys(body).length;
-
-        if (body.length < 1) {
-            callback('An error was encountered while requesting a list of devices to interrogate power status for your device');
-            accessory.reachable = false;
-            return;
-        }
-
-        let deviceId = accessory.context.deviceId;
-        let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
-
-        let filteredResponse = body.filter(device => (device.deviceid === deviceId));
-
-        if (filteredResponse.length === 1) {
-
-            let device = filteredResponse[0];
-
-            if (device.deviceid === deviceId) {
-
-                if (device.online !== true) {
-                    accessory.reachable = false;
-                    platform.log("Device [%s] was reported to be offline by the API", accessory.displayName);
-                    callback('API reported that [%s] is not online', device.name);
-                    return;
-                }
-
-                if(switchesAmount == 1) {
-                    if (device.params.bright) {
-                        accessory.reachable = true;
-                        platform.log('API reported that [%s] is at brightness [%s]', device.name, device.params.bright);
-                        callback(null, device.params.bright);
-                        return;
-                    } else {
-                        accessory.reachable = false;
-                        platform.log('API reported an unknown status for device [%s]', accessory.displayName);
-                        callback('API returned an unknown status for device ' + accessory.displayName);
-                        return;
-                    }
-                } else {
-                    //only single channel dimmers
-                    callback('only single channel dimmers');
-                }
-
-            }
-
-        } else if (filteredResponse.length > 1) {
-            // More than one device matches our Device ID. This should not happen.
-            platform.log("ERROR: The response contained more than one device with Device ID [%s]. Filtered response follows.", device.deviceid);
-            platform.log(filteredResponse);
-            callback("The response contained more than one device with Device ID " + device.deviceid);
-
-        } else if (filteredResponse.length < 1) {
-
-            // The device is no longer registered
-
-            platform.log("Device [%s] did not exist in the response. It will be removed", accessory.displayName);
-            platform.removeAccessory(accessory);
-
-        }
-
-    });
-
-
-};
-
 eWeLink.prototype.setBrightness = function(accessory, channel, brightness, callback) {
 
     let platform = this;
@@ -996,6 +1274,38 @@ eWeLink.prototype.setBrightness = function(accessory, channel, brightness, callb
 
 };
 
+/*eWeLink.prototype.setTemperatureState = function (accessory, value, callback) {
+    let platform = this;
+    let deviceId = accessory.context.deviceId;
+    let deviceInformationFromWebApi = platform.devicesFromApi.get(deviceId);
+    platform.log("setting temperature: ", value);
+    
+    deviceInformationFromWebApi.params.currentHumidity = value;
+    if(accessory.getService(Service.Thermostat)) {
+        accessory.getService(Service.Thermostat).setCharacteristic(Characteristic.CurrentTemperature, value);
+    } else if(accesory.getService(Service.TemperatureSensor)) {
+        accessory.getService(Service.TemperatureSensor).setCharacteristic(Characteristic.CurrentTemperature, value);
+    }
+    
+    callback();
+};*/
+
+/*eWeLink.prototype.setHumidityState = function (accessory, value, callback) {
+    let platform = this;
+    let deviceId = accessory.context.deviceId;
+    let deviceInformationFromWebApi = platform.devicesFromApi.get(deviceId);
+    platform.log("setting humidity: ", value);
+    
+    deviceInformationFromWebApi.params.currentHumidity = value;
+    if(accessory.getService(Service.Thermostat)) {
+        accessory.getService(Service.Thermostat).setCharacteristic(Characteristic.CurrentRelativeHumidity, value);
+    } else if(accesory.getService(Service.HumiditySensor)) {
+        accessory.getService(Service.HumiditySensor).setCharacteristic(Characteristic.CurrentRelativeHumidity, value);
+    }
+    
+    callback();
+};*/
+
 
 // Sample function to show how developer can remove accessory dynamically from outside event
 eWeLink.prototype.removeAccessory = function(accessory) {
@@ -1008,13 +1318,21 @@ eWeLink.prototype.removeAccessory = function(accessory) {
         'eWeLink', [accessory]);
 };
 
-eWeLink.prototype.login = function(callback) {
+eWeLink.prototype.getSignature = function (string) {
+    //let appSecret = "248,208,180,108,132,92,172,184,256,152,256,144,48,172,220,56,100,124,144,160,148,88,28,100,120,152,244,244,120,236,164,204";
+    //let f = "ab!@#$ijklmcdefghBCWXYZ01234DEFGHnopqrstuvwxyzAIJKLMNOPQRSTUV56789%^&*()";
+    //let decrypt = function(r){var n="";return r.split(',').forEach(function(r){var t=parseInt(r)>>2,e=f.charAt(t);n+=e}),n.trim()};
+    let decryptedAppSecret = '6Nz4n0xA8s8qdxQf2GqurZj2Fs55FUvM'; //decrypt(appSecret);
+    return crypto.createHmac('sha256', decryptedAppSecret).update(string).digest('base64');
+};
+
+eWeLink.prototype.login = function (callback) {
     if (!this.config.phoneNumber && !this.config.email || !this.config.password || !this.config.imei) {
         this.log('phoneNumber / email / password / imei not found in config, skipping login');
         callback();
         return;
     }
-    
+
     var data = {};
     if (this.config.phoneNumber) {
         data.phoneNumber = this.config.phoneNumber;
@@ -1031,27 +1349,23 @@ eWeLink.prototype.login = function(callback) {
     data.model = 'iPhone10,6';
     data.romVersion = '11.1.2';
     data.appVersion = '3.5.3';
-    
+
     let json = JSON.stringify(data);
     this.log('Sending login request with user credentials: %s', json);
-    
-    //let appSecret = "248,208,180,108,132,92,172,184,256,152,256,144,48,172,220,56,100,124,144,160,148,88,28,100,120,152,244,244,120,236,164,204";
-    //let f = "ab!@#$ijklmcdefghBCWXYZ01234DEFGHnopqrstuvwxyzAIJKLMNOPQRSTUV56789%^&*()";
-    //let decrypt = function(r){var n="";return r.split(',').forEach(function(r){var t=parseInt(r)>>2,e=f.charAt(t);n+=e}),n.trim()};
-    let decryptedAppSecret = '6Nz4n0xA8s8qdxQf2GqurZj2Fs55FUvM'; //decrypt(appSecret);
-    let sign = require('crypto').createHmac('sha256', decryptedAppSecret).update(json).digest('base64');
+
+    let sign = this.getSignature(json);
     this.log('Login signature: %s', sign);
-    
+
     let webClient = request.createClient('https://' + this.config.apiHost);
     webClient.headers['Authorization'] = 'Sign ' + sign;
     webClient.headers['Content-Type'] = 'application/json;charset=UTF-8';
-    webClient.post('/api/user/login', data , function(err, res, body) {
+    webClient.post('/api/user/login', data, function (err, res, body) {
         if (err) {
             this.log("An error was encountered while logging in. Error was [%s]", err);
             callback();
             return;
         }
-        
+
         // If we receive 301 error, switch to new region and try again
         if (body.hasOwnProperty('error') && body.error == 301 && body.hasOwnProperty('region')) {
             let idx = this.config.apiHost.indexOf('-');
@@ -1068,23 +1382,85 @@ eWeLink.prototype.login = function(callback) {
                 return;
             }
         }
-        
+
         if (!body.at) {
             let response = JSON.stringify(body);
             this.log("Server did not response with an authentication token. Response was [%s]", response);
             callback();
             return;
         }
-        
+
         this.log('Authentication token received [%s]', body.at);
         this.authenticationToken = body.at;
         this.config.authenticationToken = body.at;
         this.webClient = request.createClient('https://' + this.config['apiHost']);
         this.webClient.headers['Authorization'] = 'Bearer ' + body.at;
-        
+
         this.getWebSocketHost(function () {
             callback(body.at);
         }.bind(this));
+    }.bind(this));
+};
+
+eWeLink.prototype.getRegion = function (countryCode, callback) {
+    var data = {};
+    data.country_code = countryCode;
+    data.version = '6';
+    data.ts = '' + Math.floor(new Date().getTime() / 1000);
+    data.nonce = '' + nonce();
+    data.appid = 'oeVkj2lYFGnJu5XUtWisfW4utiN4u9Mq';
+    data.imei = this.config.imei;
+    data.os = 'iOS';
+    data.model = 'iPhone10,6';
+    data.romVersion = '11.1.2';
+    data.appVersion = '3.5.3';
+    
+    let query = querystring.stringify(data);
+    this.log('getRegion query: %s', query);
+
+    let dataToSign = [];
+    Object.keys(data).forEach(function (key) {
+        dataToSign.push({key: key, value: data[key]});
+    });
+    dataToSign.sort(function (a, b) {
+        return a.key < b.key ? -1 : 1;
+    });
+    dataToSign = dataToSign.map(function (kv) {
+        return kv.key + "=" + kv.value;
+    }).join('&');
+
+    let sign = this.getSignature(dataToSign);
+    this.log('getRegion signature: %s', sign);
+
+    let webClient = request.createClient('https://api.coolkit.cc:8080');
+    webClient.headers['Authorization'] = 'Sign ' + sign;
+    webClient.headers['Content-Type'] = 'application/json;charset=UTF-8';
+    webClient.get('/api/user/region?' + query, function (err, res, body) {
+        if (err) {
+            this.log("An error was encountered while getting region. Error was [%s]", err);
+            callback();
+            return;
+        }
+
+        if (!body.region) {
+            let response = JSON.stringify(body);
+            this.log("Server did not response with a region. Response was [%s]", response);
+            callback();
+            return;
+        }
+
+        let idx = this.config.apiHost.indexOf('-');
+        if (idx == -1) {
+            this.log("Received region [%s]. However we cannot construct the new API host url.", body.region);
+            callback();
+            return;
+        }
+        let newApiHost = body.region + this.config.apiHost.substring(idx);
+        if (this.config.apiHost != newApiHost) {
+            this.log("Received region [%s], updating API host to [%s].", body.region, newApiHost);
+            this.config.apiHost = newApiHost;
+        }
+        callback(body.region);
     }.bind(this));
 };
 
@@ -1100,24 +1476,24 @@ eWeLink.prototype.getWebSocketHost = function (callback) {
     data.model = 'iPhone10,6';
     data.romVersion = '11.1.2';
     data.appVersion = '3.5.3';
-    
+
     let webClient = request.createClient('https://' + this.config.apiHost.replace('-api', '-disp'));
     webClient.headers['Authorization'] = 'Bearer ' + this.authenticationToken;
     webClient.headers['Content-Type'] = 'application/json;charset=UTF-8';
-    webClient.post('/dispatch/app', data , function(err, res, body) {
+    webClient.post('/dispatch/app', data, function (err, res, body) {
         if (err) {
             this.log("An error was encountered while getting websocket host. Error was [%s]", err);
             callback();
             return;
         }
-        
+
         if (!body.domain) {
             let response = JSON.stringify(body);
             this.log("Server did not response with a websocket host. Response was [%s]", response);
             callback();
             return;
         }
-        
+
         this.log('WebSocket host received [%s]', body.domain);
         this.config['webSocketApi'] = body.domain;
         if (this.wsc) {
@@ -1270,6 +1646,25 @@ eWeLink.prototype.getDeviceIsBridge = function (device) {
     return bridge;
 };
 
+
+//create arguments for later get request
+eWeLink.prototype.getArguments = function () {
+    let args = {};
+    args.lang = 'en';
+    args.apiKey = this.apiKey;
+    args.getTags = '1';
+    args.version = '6';
+    args.ts = '' + Math.floor(new Date().getTime() / 1000);
+    args.nounce = '' + nonce();
+    args.appid = 'oeVkj2lYFGnJu5XUtWisfW4utiN4u9Mq';
+    args.imei = this.config.imei;
+    args.os = 'iOS';
+    args.model = 'iPhone10,6';
+    args.romVersion = '11.1.2';
+    args.appVersion = '3.5.3';
+    return querystring.stringify(args);
+};
+
 /* WEB SOCKET STUFF */
 
 function WebSocketClient() {
@@ -1344,4 +1739,66 @@ WebSocketClient.prototype.onerror = function(e) {
 };
 WebSocketClient.prototype.onclose = function(e) {
     // console.log("WebSocketClient: closed", arguments);
+};
+
+
+eWeLink.prototype.initSwitchesConfig = function (accessory) {
+    // This method is called from addAccessory() and checkIfDeviceIsAlreadyConfigured().
+    // Don't called from configureAccessory() because we need to be connected to the socket.
+    let platform = this;
+    let payload = {};
+    payload.action = 'update';
+    payload.userAgent = 'app';
+    payload.params = {
+        "lock": 0,
+        "zyx_clear_timers": false,
+        "configure": [
+            {"startup": "off", "outlet": 0},
+            {"startup": "off", "outlet": 1},
+            {"startup": "off", "outlet": 2},
+            {"startup": "off", "outlet": 3}
+        ],
+        "pulses": [
+            {"pulse": "off", "width": 1000, "outlet": 0},
+            {"pulse": "off", "width": 1000, "outlet": 1},
+            {"pulse": "off", "width": 1000, "outlet": 2},
+            {"pulse": "off", "width": 1000, "outlet": 3}
+        ],
+        "switches": [
+            {"switch": "off", "outlet": 0},
+            {"switch": "off", "outlet": 1},
+            {"switch": "off", "outlet": 2},
+            {"switch": "off", "outlet": 3}
+        ]
+    };
+
+    payload.apikey = '' + accessory.context.apiKey;
+    payload.deviceid = '' + accessory.context.deviceId;
+    payload.sequence = platform.getSequence();
+
+    let string = JSON.stringify(payload);
+
+    // Delaying execution to be sure Socket is open
+    platform.log("[%s] Waiting 5 sec before sending init config request...", accessory.displayName);
+
+    setTimeout(function () {
+        if (platform.isSocketOpen) {
+
+            setTimeout(function () {
+                platform.wsc.send(string);
+                platform.log("[%s] Request sent to configure switches", accessory.displayName);
+                return true;
+                // TODO Here we need to wait for the response to the socket
+            }, 1);
+
+        } else {
+            platform.log("[%s] Socket was closed. Retrying is 5 sec...", accessory.displayName);
+            setTimeout(function () {
+                platform.initSwitchesConfig(accessory);
+                platform.log("[%s] Request sent to configure switches", accessory.displayName);
+                return false;
+                // TODO Here we need to wait for the response to the socket
+            }, 5000);
+        }
+    }, 5000);
 };

@@ -41,6 +41,7 @@ function eWeLink(log, config, api) {
     this.accessories = new Map();
     this.authenticationToken = config['authenticationToken'];
     this.devicesFromApi = new Map();
+    this.sensorTimers = [];
 
     if (!config || (!config['authenticationToken'] && ((!config['phoneNumber'] && !config['email']) || !config['password'] || !config['imei']))) {
         log("Initialization skipped. Missing configuration data.");
@@ -437,7 +438,7 @@ eWeLink.prototype.addAccessory = function(device) {
                     platform.setBrightness(accessory, "0", value, callback);
                 })
                 .on('get', function(callback) {
-                    platform.getBrightness(accessory, "0", callback);
+                    platform.getBrightnessState(accessory, "0", callback);
                 }); 
         } else {
             accessory.addService(Service.Switch, device.name, 'channel-0')

@@ -541,8 +541,10 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
     
     const accessory = new Accessory(deviceName, UUIDGen.generate((deviceId ? deviceId : device.deviceid).toString()));
 
-    accessory.context.deviceId = device.deviceid;
+    accessory.context.deviceId = deviceId ? deviceId : device.deviceid;
     accessory.context.apiKey = device.apikey;
+    accessory.context.switches = 1;
+    accessory.context.channel = channel;
 
     let switchesAmount = platform.getDeviceChannelCount(device);
     let dimmable = platform.getDeviceDimmable(device);
@@ -583,7 +585,15 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
                 });
         }
         accessory.context.channels.push(0);
-    } else if (switchesAmount > 2) {
+    } else if (switchesAmount > 1) {
+        accessory.addService(Service.Switch, deviceName, 'channel-0')
+            .getCharacteristic(Characteristic.On)
+            .on('set', function(value, callback) {
+                platform.setPowerState(accessory, "0", value, callback);
+            })
+            .on('get', function(callback) {
+                platform.getPowerState(accessory, "0", callback);
+            });
         /*for (var switchChannel = 0; switchChannel < switchesAmount; switchChannel++) {
             accessory.addService(Service.Switch, device.name + ' CH' + (switchChannel + 1), 'channel-' + switchChannel)
                 .getCharacteristic(Characteristic.On)
@@ -845,20 +855,28 @@ eWeLink.prototype.getPowerState = function (accessory, channel, callback) {
 
         let deviceId = accessory.context.deviceId;
 
-        if (accessory.context.switches > 1) {
-            deviceId = deviceId.replace("CH" + accessory.context.channel, "");
+        let id = deviceId.split("CH");
+        let realDeviceId = id[0];
+        let realChannel = id[1];
+
+        if (!realChannel) {
+            realChannel = 0;
         }
 
-        let filteredResponse = body.filter(device => (device.deviceid === deviceId));
+        /*if (accessory.context.switches > 1) {
+            deviceId = deviceId.replace("CH" + accessory.context.channel, "");
+        }*/
+
+        let filteredResponse = body.filter(device => (device.deviceid === realDeviceId));
         platform.log("Response received for power state: " + deviceId);
 
-        let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(deviceId));
+        let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(realDeviceId));
         
         if (filteredResponse.length === 1) {
 
             let device = filteredResponse[0];
 
-            if (device.deviceid === deviceId) {
+            if (device.deviceid === realDeviceId) {
 
                 if (device.online !== true) {
                     accessory.reachable = false;
@@ -867,7 +885,7 @@ eWeLink.prototype.getPowerState = function (accessory, channel, callback) {
                     return;
                 }
 
-                if (accessory.context.switches > 1) {
+                if (switchesAmount > 1) {
                     if (device.params.switches[accessory.context.channel - 1].switch === 'on') {
                         accessory.reachable = true;
                         platform.log('API reported that [%s] CH %s is On', device.name, accessory.context.channel);
@@ -1298,6 +1316,20 @@ eWeLink.prototype.setPowerState = function(accessory, channel, isOn, callback) {
     let platform = this;
     let options = {};
     let deviceId = accessory.context.deviceId;
+
+    let id = deviceId.split("CH");
+    let realDeviceId = id[0];
+    let realChannel = id[1];
+
+    if (!realChannel) {
+        realChannel = 0;
+    } else {
+        realChannel = parseInt(realChannel);
+        realChannel = realChannel - 1;
+    }
+
+    let switchesAmount = platform.getDeviceChannelCount(platform.devicesFromApi.get(realDeviceId));
+
     options.protocolVersion = 13;
 
     let targetState = 'off';
@@ -1312,16 +1344,17 @@ eWeLink.prototype.setPowerState = function(accessory, channel, isOn, callback) {
     payload.action = 'update';
     payload.userAgent = 'app';
     payload.params = {};
-    if (accessory.context.switches > 1) {
-        deviceId = deviceId.replace("CH" + accessory.context.channel, "");
-        let deviceInformationFromWebApi = platform.devicesFromApi.get(deviceId);
+
+    if (switchesAmount > 1) {
+        let deviceInformationFromWebApi = platform.devicesFromApi.get(realDeviceId);
+        platform.log(JSON.stringify(deviceInformationFromWebApi.params.switches))
         payload.params.switches = deviceInformationFromWebApi.params.switches;
-        payload.params.switches[accessory.context.channel - 1].switch = targetState;
+        payload.params.switches[realChannel].switch = targetState;
     } else {
         payload.params.switch = targetState;
     }
     payload.apikey = '' + accessory.context.apiKey;
-    payload.deviceid = '' + deviceId;
+    payload.deviceid = '' + realDeviceId;
 
     payload.sequence = platform.getSequence();
 

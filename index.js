@@ -146,20 +146,7 @@ function eWeLink(log, config, api) {
                             realDeviceId = deviceId.replace('CH' + accessory.context.channel, "");
                         }
 
-                        if (platform.devicesFromApi.has(realDeviceId) && (accessory.context.switches <= 1 || accessory.context.channel <= accessory.context.switches)) {
-                            if ((deviceId != realDeviceId) && platform.groups.has(realDeviceId)) {
-                                platform.log('Device [%s], ID : [%s] is now grouped. It will be removed.', accessory.displayName, accessory.UUID);
-                                platform.removeAccessory(accessory);
-                            } else if ((deviceId == realDeviceId) && !platform.groups.has(realDeviceId)) {
-                                platform.log('Device [%s], ID : [%s] is now split. It will be removed.', accessory.displayName, accessory.UUID);
-                                platform.removeAccessory(accessory);
-                            } else if (platform.getDeviceTypeByUiid(platform.devicesFromApi.get(realDeviceId).uiid) === 'FAN_LIGHT' && accessory.context.channel !== null) {
-                                platform.log('Device [%s], ID : [%s] is now grouped as a fan. It will be removed.', accessory.displayName, accessory.UUID);
-                                platform.removeAccessory(accessory);
-                            } else {
-                                platform.log('[%s] Device is registered with API. ID: (%s). Nothing to do.', accessory.displayName, accessory.UUID);
-                            }
-                        } else if (platform.devicesFromApi.has(realDeviceId) && platform.getDeviceTypeByUiid(platform.devicesFromApi.get(realDeviceId).uiid) === 'FAN_LIGHT') {
+                        if (platform.devicesFromApi.has(realDeviceId)) {
                             platform.log('[%s] Device is registered with API. ID: (%s). Nothing to do.', accessory.displayName, accessory.UUID);
                         } else {
                             platform.log('Device [%s], ID : [%s] was not present in the response from the API. It will be removed.', accessory.displayName, accessory.UUID);
@@ -194,31 +181,12 @@ function eWeLink(log, config, api) {
                             accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.FirmwareRevision, deviceInformationFromWebApi.params.fwVersion);
 
                             if (switchesAmount > 1) {
-                                if (platform.groups.has(deviceInformationFromWebApi.deviceid)) {
-                                    let group = platform.groups.get(deviceInformationFromWebApi.deviceid);
-
-                                    switch (group.type) {
-                                        case 'blind':
-                                            platform.log("Blind device has been set: " + deviceInformationFromWebApi.extra.extra.model + ' uiid: ' + deviceInformationFromWebApi.uiid);
-                                            accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Name, deviceInformationFromWebApi.name);
-                                            platform.updateBlindStateCharacteristic(deviceId, deviceInformationFromWebApi.params.switches);
-                                            // Ensuring switches device config
-                                            platform.initSwitchesConfig(accessory);
-                                            break;
-                                        default:
-                                            platform.log('Group type error ! Device [%s], ID : [%s] will not be set', deviceInformationFromWebApi.name, deviceInformationFromWebApi.deviceid);
-                                            break;
-                                    }
-                                } else if (deviceType === 'FAN_LIGHT') {
-                                    platform.updateFanLightCharacteristic(deviceId, deviceInformationFromWebApi.params.switches[0].switch, platform.devicesFromApi.get(deviceId));
-                                    platform.updateFanSpeedCharacteristic(deviceId, deviceInformationFromWebApi.params.switches[1].switch, deviceInformationFromWebApi.params.switches[2].switch, deviceInformationFromWebApi.params.switches[3].switch, platform.devicesFromApi.get(deviceId));
-                                } else {
-                                    platform.log(switchesAmount + " channels device has been set: " + deviceInformationFromWebApi.extra.extra.model + ' uiid: ' + deviceInformationFromWebApi.uiid);
-                                    for (let i = 0; i !== switchesAmount; i++) {
-                                        accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Name, deviceInformationFromWebApi.name + ' CH ' + (i + 1));
-                                        platform.updatePowerStateCharacteristic(deviceId + 'CH' + (i + 1), deviceInformationFromWebApi.params.switches[i].switch);
-                                    }
-                                }
+                                platform.log("THIS SHOULD NOT BE CALLED");
+                                platform.log(switchesAmount + " channels device has been set: " + deviceInformationFromWebApi.extra.extra.model + ' uiid: ' + deviceInformationFromWebApi.uiid);
+                                /*for (let i = 0; i !== switchesAmount; i++) {
+                                    accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Name, deviceInformationFromWebApi.name + ' CH ' + (i + 1));
+                                    platform.updatePowerStateCharacteristic(deviceId + 'CH' + (i + 1), deviceInformationFromWebApi.params.switches[i].switch);
+                                }*/
                             } else {
                                 platform.log("Single channel device has been set: " + deviceInformationFromWebApi.extra.extra.model + ' uiid: ' + deviceInformationFromWebApi.uiid);
                                 accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Name, deviceInformationFromWebApi.name);
@@ -229,56 +197,58 @@ function eWeLink(log, config, api) {
                                 }
                             }
 
-                            if (deviceInformationFromWebApi.extra.extra.model === "PSA-BHA-GL") {
-                                platform.log("Thermostat device has been set: " + deviceInformationFromWebApi.extra.extra.model);
-                                platform.updateCurrentTemperatureCharacteristic(deviceId, deviceInformationFromWebApi.params);
-                            }
-
                         } else {
-                            platform.log('Device with ID [%s] is not configured. Add accessory.', deviceId);
 
-                            let deviceToAdd = platform.devicesFromApi.get(deviceId);
-                            let switchesAmount = platform.getDeviceChannelCount(deviceToAdd);
+                            platform.log('Device with ID [%s] is not configured. Check if Multi-channel device.', deviceId);
+
+                            let deviceToCheck = platform.devicesFromApi.get(deviceId);
+                            let switchesAmount = platform.getDeviceChannelCount(deviceToCheck);
 
                             let services = {};
                             services.switch = true;
 
-                            if (deviceToAdd.extra.extra.model === "PSA-BHA-GL") {
-                                services.thermostat = true;
-                                services.temperature = true;
-                                services.humidity = true;
-                            } else {
-                                services.switch = true;
-                            }
                             if (switchesAmount > 1) {
-                                if (platform.groups.has(deviceToAdd.deviceid)) {
-                                    let group = platform.groups.get(deviceToAdd.deviceid);
-                                    switch (group.type) {
-                                        case 'blind':
-                                            platform.log('Device [%s], ID : [%s] will be added as %s', deviceToAdd.name, deviceToAdd.deviceid, group.type);
-                                            services.blind = true;
-                                            services.switch = false;
-                                            services.group = group;
-                                            platform.addAccessory(deviceToAdd, null, services);
-                                            break;
-                                        default:
-                                            platform.log('Group type error ! Device [%s], ID : [%s] will not be added', deviceToAdd.name, deviceToAdd.deviceid);
-                                            break;
-                                    }
-                                } else if (deviceToAdd.extra.extra.model === "PSF-BFB-GL") {
-                                    services.fan = true;
-                                    services.switch = false;
-                                    platform.log('Device [%s], ID : [%s] will be added as a fam', deviceToAdd.name, deviceToAdd.deviceid);
-                                    platform.addAccessory(deviceToAdd, deviceToAdd.deviceid, services);
-                                } else {
-                                    for (let i = 0; i !== switchesAmount; i++) {
-                                        platform.log('Device [%s], ID : [%s] will be added', deviceToAdd.name, deviceToAdd.deviceid + 'CH' + (i + 1));
-                                        platform.addAccessory(deviceToAdd, deviceToAdd.deviceid + 'CH' + (i + 1), services);
+
+                                for (let i = 0; i !== switchesAmount; i++) {
+
+                                    let channel = i + 1;
+
+                                    let newDeviceId = deviceId + "CH" + channel;
+
+                                    platform.log('Checking for a Device with ID [%s].', newDeviceId);
+
+                                    if (platform.accessories.has(newDeviceId)) {
+
+                                        platform.log('Device with ID [%s] is already configured. Ensuring that the configuration is current.', newDeviceId);
+
+                                        let accessory = platform.accessories.get(newDeviceId);
+                                        let deviceInformationFromWebApi = platform.devicesFromApi.get(deviceId);
+                                        let deviceType = platform.getDeviceTypeByUiid(deviceInformationFromWebApi.uiid);
+                                        let switchesAmount = platform.getDeviceChannelCount(deviceInformationFromWebApi);
+                                        let dimmable = platform.getDeviceDimmable(deviceInformationFromWebApi);
+
+                                        accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.SerialNumber, deviceInformationFromWebApi.extra.extra.mac);
+                                        accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Manufacturer, deviceInformationFromWebApi.productModel);
+                                        accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Model, deviceInformationFromWebApi.extra.extra.model + ' (' + deviceInformationFromWebApi.uiid + ')');
+                                        accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.FirmwareRevision, deviceInformationFromWebApi.params.fwVersion);
+
+                                        platform.log("Single channel device has been set: " + deviceInformationFromWebApi.extra.extra.model + ' uiid: ' + deviceInformationFromWebApi.uiid);
+                                        accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Name, deviceInformationFromWebApi.name + "CH" + channel);
+                                        platform.updatePowerStateCharacteristic(newDeviceId, deviceInformationFromWebApi.params.switches[i].switch);
+                                        /*if (dimmable) {
+                                            platform.log("Dimmable device");
+                                            platform.updateBrightnessCharacteristic(newDeviceId, deviceInformationFromWebApi.params.bright);
+                                        }*/
+
+                                    } else {
+                                        platform.log('Device [%s], ID : [%s] will be added', deviceToCheck.name + " CH " + channel, newDeviceId);
+                                        platform.addAccessory(deviceToCheck, newDeviceId);
                                     }
                                 }
+
                             } else {
-                                platform.log('Device [%s], ID : [%s] will be added', deviceToAdd.name, deviceToAdd.deviceid);
-                                platform.addAccessory(deviceToAdd, null, services);
+                                platform.log('Device [%s], ID : [%s] will be added', deviceToCheck.name, deviceToCheck.deviceid);
+                                platform.addAccessory(deviceToCheck, null);
                             }
                         }
                     }
@@ -329,37 +299,11 @@ function eWeLink(log, config, api) {
 
                                 } else if (json.hasOwnProperty("params") && json.params.hasOwnProperty("switches") && Array.isArray(json.params.switches)) {
 
-
-                                    platform.updatePowerStateCharacteristicMultiple(json.deviceid, json.params.switches);
-
-                                    /*if (platform.groups.has(json.deviceid)) {
-                                        let group = platform.groups.get(json.deviceid);
-                                        console.log('---------------' + group);
-
-                                        switch (group.type) {
-                                            case 'blind':
-                                                if (group.handle_api_changes) {
-                                                    platform.updateBlindStateCharacteristic(json.deviceid, json.params.switches);
-                                                } else {
-                                                    platform.log('Setup to not respond to API. Device ID : [%s] will not be updated.', json.deviceid);
-                                                }
-                                                break;
-                                            default:
-                                                platform.log('Group type error ! Device ID : [%s] will not be updated.', json.deviceid);
-                                                break;
+                                    json.params.switches.forEach(function (entry) {
+                                        if (entry.hasOwnProperty('outlet') && entry.hasOwnProperty('switch')) {
+                                            platform.updatePowerStateCharacteristic(json.deviceid + 'CH' + (entry.outlet + 1), entry.switch);
                                         }
-                                    } else if (platform.devicesFromApi.has(json.deviceid) && platform.getDeviceTypeByUiid(platform.devicesFromApi.get(json.deviceid).uiid) === 'FAN_LIGHT') {
-                                        platform.updateFanLightCharacteristic(json.deviceid, json.params.switches[0].switch, platform.devicesFromApi.get(json.deviceid));
-                                        platform.devicesFromApi.get(json.deviceid).params.switches = json.params.switches;
-                                        platform.updateFanSpeedCharacteristic(json.deviceid, json.params.switches[1].switch, json.params.switches[2].switch, json.params.switches[3].switch, platform.devicesFromApi.get(json.deviceid));
-                                    } else {
-                                        json.params.switches.forEach(function (entry) {
-                                            platform.log("THIS ONE", entry.outlet);
-                                            if (entry.hasOwnProperty('outlet') && entry.hasOwnProperty('switch')) {
-                                                platform.updatePowerStateCharacteristic(json.deviceid + 'CH' + (entry.outlet + 1), entry.switch);
-                                            }
-                                        });
-                                    }*/
+                                    });
                                 }
 
                                 if (json.hasOwnProperty("params") && json.params.hasOwnProperty("bright")) {
@@ -547,14 +491,15 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
     
     const accessory = new Accessory(deviceName, UUIDGen.generate((deviceId ? deviceId : device.deviceid).toString()));
 
-    accessory.context.deviceId = deviceId ? deviceId : device.deviceid;
-    accessory.context.apiKey = device.apikey;
-    accessory.context.switches = 1;
-    accessory.context.channel = channel;
-
     let switchesAmount = platform.getDeviceChannelCount(device);
 
-    switchesAmount = 1; //Multi-channel switches are split, so each one only has one switch now.
+    accessory.context.deviceId = deviceId ? deviceId : device.deviceid;
+    accessory.context.apiKey = device.apikey;
+    accessory.context.switches = switchesAmount;
+    accessory.context.channel = channel;
+
+
+    //switchesAmount = 1; //Multi-channel switches are split, so each one only has one switch now.
 
     let dimmable = platform.getDeviceDimmable(device);
     let rgb = platform.getDeviceRgb(device);
@@ -660,9 +605,6 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
     // Used when we receive an update from an external source
     let platform = this;
 
-    platform.log("deviceId", deviceId);
-    platform.log("state", state);
-
     let id = deviceId.split("CH");
     let realDeviceId = id[0];
     let realChannel = id[1] - 1;
@@ -671,92 +613,12 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
         realChannel = 0;
     }
 
-    platform.log("realDeviceId", realDeviceId);
-    platform.log("realChannel", realChannel);
-
-    platform.log("getting device");
     let device = platform.devicesFromApi.get(realDeviceId);
-    //platform.log("device", device);
 
     let accessory = platform.accessories.get(deviceId);
-    if (realChannel == 0) {
-        platform.log("accessory", accessory);
-    }
 
     let switchesAmount = platform.getDeviceChannelCount(device);
     let dimmable = platform.getDeviceDimmable(device);
-
-    platform.log("switchesAmount", switchesAmount);
-    platform.log("dimmable", dimmable);
-
-    if (!accessory) {
-        platform.log("Error updating non-exist accessory with deviceId [%s].", deviceId);
-        return;
-    }
-
-    platform.log("Updating recorded Characteristic.On for [%s], to.", accessory.displayName, state);
-
-    var isOn = false;
-    if (state == 'on') {
-        isOn = true;
-    }
-
-    if (switchesAmount == 0) {
-        //Don't do anything, no switches
-    } else if (switchesAmount == 1) {
-        if (dimmable) {
-            if (accessory.getService(Service.Lightbulb)) {
-                accessory.getService(Service.Lightbulb).updateCharacteristic(Characteristic.On, isOn);
-            }
-        } else {
-            if (accessory.getService(Service.Switch)) {
-                accessory.getService(Service.Switch).updateCharacteristic(Characteristic.On, isOn);
-            }
-        }
-        
-    } else if (switchesAmount == 2) {
-        if (accessory.getService(Service.Switch)) {
-            accessory.getService(Service.Switch).updateCharacteristic(Characteristic.On, isOn);
-        }
-    }
-    
-    //only up to two channel switches supported
-
-};
-
-eWeLink.prototype.updatePowerStateCharacteristicMultiple = function(deviceId, statesArray) {
-
-    // Used when we receive an update from an external source
-    let platform = this;
-
-    platform.log("deviceId", deviceId);
-    platform.log("state", statesArray);
-
-    let id = deviceId.split("CH");
-    let realDeviceId = id[0];
-    let realChannel = id[1] - 1;
-
-    if (!realChannel) {
-        realChannel = 0;
-    }
-
-    platform.log("realDeviceId", realDeviceId);
-    platform.log("realChannel", realChannel);
-
-    platform.log("getting device");
-    let device = platform.devicesFromApi.get(realDeviceId);
-    //platform.log("device", device);
-
-    let accessory = platform.accessories.get(deviceId);
-    if (realChannel == 0) {
-        platform.log("accessory", accessory);
-    }
-
-    let switchesAmount = platform.getDeviceChannelCount(device);
-    let dimmable = platform.getDeviceDimmable(device);
-
-    platform.log("switchesAmount", switchesAmount);
-    platform.log("dimmable", dimmable);
 
     if (!accessory) {
         platform.log("Error updating non-exist accessory with deviceId [%s].", deviceId);

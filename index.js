@@ -216,7 +216,7 @@ function eWeLink(log, config, api) {
                                     platform.log(switchesAmount + " channels device has been set: " + deviceInformationFromWebApi.extra.extra.model + ' uiid: ' + deviceInformationFromWebApi.uiid);
                                     for (let i = 0; i !== switchesAmount; i++) {
                                         accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Name, deviceInformationFromWebApi.name + ' CH ' + (i + 1));
-                                        platform.updatePowerStateCharacteristic(deviceId + 'CH' + (i + 1), deviceInformationFromWebApi.params.switches[i].switch, platform.devicesFromApi.get(deviceId));
+                                        platform.updatePowerStateCharacteristic(deviceId + 'CH' + (i + 1), deviceInformationFromWebApi.params.switches[i].switch);
                                     }
                                 }
                             } else {
@@ -329,7 +329,10 @@ function eWeLink(log, config, api) {
 
                                 } else if (json.hasOwnProperty("params") && json.params.hasOwnProperty("switches") && Array.isArray(json.params.switches)) {
 
-                                    if (platform.groups.has(json.deviceid)) {
+
+                                    platform.updatePowerStateCharacteristicMultiple(json.deviceid, json.params.switches);
+
+                                    /*if (platform.groups.has(json.deviceid)) {
                                         let group = platform.groups.get(json.deviceid);
                                         console.log('---------------' + group);
 
@@ -351,11 +354,12 @@ function eWeLink(log, config, api) {
                                         platform.updateFanSpeedCharacteristic(json.deviceid, json.params.switches[1].switch, json.params.switches[2].switch, json.params.switches[3].switch, platform.devicesFromApi.get(json.deviceid));
                                     } else {
                                         json.params.switches.forEach(function (entry) {
+                                            platform.log("THIS ONE", entry.outlet);
                                             if (entry.hasOwnProperty('outlet') && entry.hasOwnProperty('switch')) {
-                                                platform.updatePowerStateCharacteristic(json.deviceid + 'CH' + (entry.outlet + 1), entry.switch, platform.devicesFromApi.get(json.deviceid));
+                                                platform.updatePowerStateCharacteristic(json.deviceid + 'CH' + (entry.outlet + 1), entry.switch);
                                             }
                                         });
-                                    }
+                                    }*/
                                 }
 
                                 if (json.hasOwnProperty("params") && json.params.hasOwnProperty("bright")) {
@@ -538,6 +542,8 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
     }
 
     let deviceName = device.name + (channel ? ' CH ' + channel : '');
+
+    platform.log("deviceId", deviceId ? deviceId : device.deviceid);
     
     const accessory = new Accessory(deviceName, UUIDGen.generate((deviceId ? deviceId : device.deviceid).toString()));
 
@@ -547,6 +553,9 @@ eWeLink.prototype.addAccessory = function(device, deviceId = null) {
     accessory.context.channel = channel;
 
     let switchesAmount = platform.getDeviceChannelCount(device);
+
+    switchesAmount = 1; //Multi-channel switches are split, so each one only has one switch now.
+
     let dimmable = platform.getDeviceDimmable(device);
     let rgb = platform.getDeviceRgb(device);
     let isBridge = platform.getDeviceIsBridge(device);
@@ -646,19 +655,39 @@ eWeLink.prototype.getSequence = function() {
 };
 
 // Update characteristics when updated from an externral source
-eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, device = null) {
+eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state) {
 
     // Used when we receive an update from an external source
     let platform = this;
 
-    if (!device) {
-        device = platform.devicesFromApi.get(deviceId);
+    platform.log("deviceId", deviceId);
+    platform.log("state", state);
+
+    let id = deviceId.split("CH");
+    let realDeviceId = id[0];
+    let realChannel = id[1] - 1;
+
+    if (!realChannel) {
+        realChannel = 0;
     }
 
-    let accessory = platform.accessories.get(device.deviceid);
+    platform.log("realDeviceId", realDeviceId);
+    platform.log("realChannel", realChannel);
+
+    platform.log("getting device");
+    let device = platform.devicesFromApi.get(realDeviceId);
+    //platform.log("device", device);
+
+    let accessory = platform.accessories.get(deviceId);
+    if (realChannel == 0) {
+        platform.log("accessory", accessory);
+    }
 
     let switchesAmount = platform.getDeviceChannelCount(device);
     let dimmable = platform.getDeviceDimmable(device);
+
+    platform.log("switchesAmount", switchesAmount);
+    platform.log("dimmable", dimmable);
 
     if (!accessory) {
         platform.log("Error updating non-exist accessory with deviceId [%s].", deviceId);
@@ -667,13 +696,14 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
 
     platform.log("Updating recorded Characteristic.On for [%s], to.", accessory.displayName, state);
 
+    var isOn = false;
+    if (state == 'on') {
+        isOn = true;
+    }
+
     if (switchesAmount == 0) {
         //Don't do anything, no switches
     } else if (switchesAmount == 1) {
-        var isOn = false;
-        if (state == 'on') {
-            isOn = true;
-        }
         if (dimmable) {
             if (accessory.getService(Service.Lightbulb)) {
                 accessory.getService(Service.Lightbulb).updateCharacteristic(Characteristic.On, isOn);
@@ -685,22 +715,78 @@ eWeLink.prototype.updatePowerStateCharacteristic = function(deviceId, state, dev
         }
         
     } else if (switchesAmount == 2) {
-        state.forEach(function (entry) {
-            if (entry.hasOwnProperty('outlet') && entry.hasOwnProperty('switch')) {
-                var channel = entry.outlet;
-                if (channel < switchesAmount) {
-                    var isOn = false;
-                    if (entry.switch == 'on') {
-                        isOn = true;
-                    }
-                    var channelString = 'channel-' + channel;
-                    var service = accessory.getServiceByUUIDAndSubType(Service.Switch, channelString);
-                    if (service) {
-                        service.updateCharacteristic(Characteristic.On, isOn);
-                    }
-                }
+        if (accessory.getService(Service.Switch)) {
+            accessory.getService(Service.Switch).updateCharacteristic(Characteristic.On, isOn);
+        }
+    }
+    
+    //only up to two channel switches supported
+
+};
+
+eWeLink.prototype.updatePowerStateCharacteristicMultiple = function(deviceId, statesArray) {
+
+    // Used when we receive an update from an external source
+    let platform = this;
+
+    platform.log("deviceId", deviceId);
+    platform.log("state", statesArray);
+
+    let id = deviceId.split("CH");
+    let realDeviceId = id[0];
+    let realChannel = id[1] - 1;
+
+    if (!realChannel) {
+        realChannel = 0;
+    }
+
+    platform.log("realDeviceId", realDeviceId);
+    platform.log("realChannel", realChannel);
+
+    platform.log("getting device");
+    let device = platform.devicesFromApi.get(realDeviceId);
+    //platform.log("device", device);
+
+    let accessory = platform.accessories.get(deviceId);
+    if (realChannel == 0) {
+        platform.log("accessory", accessory);
+    }
+
+    let switchesAmount = platform.getDeviceChannelCount(device);
+    let dimmable = platform.getDeviceDimmable(device);
+
+    platform.log("switchesAmount", switchesAmount);
+    platform.log("dimmable", dimmable);
+
+    if (!accessory) {
+        platform.log("Error updating non-exist accessory with deviceId [%s].", deviceId);
+        return;
+    }
+
+    platform.log("Updating recorded Characteristic.On for [%s], to.", accessory.displayName, state);
+
+    var isOn = false;
+    if (state == 'on') {
+        isOn = true;
+    }
+
+    if (switchesAmount == 0) {
+        //Don't do anything, no switches
+    } else if (switchesAmount == 1) {
+        if (dimmable) {
+            if (accessory.getService(Service.Lightbulb)) {
+                accessory.getService(Service.Lightbulb).updateCharacteristic(Characteristic.On, isOn);
             }
-        });
+        } else {
+            if (accessory.getService(Service.Switch)) {
+                accessory.getService(Service.Switch).updateCharacteristic(Characteristic.On, isOn);
+            }
+        }
+        
+    } else if (switchesAmount == 2) {
+        if (accessory.getService(Service.Switch)) {
+            accessory.getService(Service.Switch).updateCharacteristic(Characteristic.On, isOn);
+        }
     }
     
     //only up to two channel switches supported
